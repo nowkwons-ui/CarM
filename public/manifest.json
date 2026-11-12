@@ -1,0 +1,17 @@
+{
+  "name": "PlateTalk (플레이트톡) - 운전자 핸즈프리 소통 & 명예 앱",
+  "short_name": "PlateTalk",
+  "description": "차량 번호판 기반 실시간 핸즈프리(STT/TTS) 안전 소통, 3단계 OCR 인증, 명예 스티커 및 기프트샵 모바일 앱",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#04070f",
+  "theme_color": "#04070f",
+  "icons": [
+    {
+      "src": "/assets/honor-emblem.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
