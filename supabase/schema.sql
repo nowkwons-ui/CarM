@@ -5,7 +5,7 @@
 
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "postgis";
+-- [REVIEW] postgis는 사용처가 없어 제거 (5km 브로드캐스트를 geography로 구현할 때 다시 추가)
 
 -- ============================================================================
 -- 1. ENUM Types
@@ -74,7 +74,8 @@ CREATE TYPE payment_status_enum AS ENUM (
 
 -- 2.1 users: 사용자 및 명예 포인트/스티커 상태 관리
 CREATE TABLE public.users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  -- [REVIEW] 기존 uuid_generate_v4() 기본값은 auth.uid()와 절대 일치하지 않아 RLS가 전부 실패했음
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   auth_provider VARCHAR(32) NOT NULL DEFAULT 'KAKAO', -- KAKAO, GOOGLE, APPLE
   email VARCHAR(255) UNIQUE NOT NULL,
   phone VARCHAR(32) UNIQUE NOT NULL,
@@ -96,8 +97,11 @@ CREATE TABLE public.users (
 CREATE TABLE public.vehicles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  license_plate VARCHAR(24) UNIQUE NOT NULL,          -- 예: '123가 4568', 고유 ID로 활용
-  vin VARCHAR(32) UNIQUE NOT NULL,                    -- 차대번호 17자리 (예: KMHL341CBNP012345)
+  -- [REVIEW] 전역 UNIQUE 제거: 타인이 남의 번호판을 PENDING으로 선점(squatting)해 실소유주 등록을
+  -- 막는 공격과, 공동운전자가 같은 차량을 등록하지 못하는 문제가 있었음.
+  -- → VERIFIED 상태의 PRIMARY_OWNER에 대해서만 부분 유니크 인덱스로 강제 (아래 인덱스 참고)
+  license_plate VARCHAR(24) NOT NULL,                 -- 예: '123가 4568', 공백 제거 정규화 후 저장
+  vin VARCHAR(32) NOT NULL,                           -- 차대번호 17자리 (예: KMHL341CBNP012345)
   registered_owner_name VARCHAR(100) NOT NULL,        -- 등록증에서 OCR 추출된 소유주 성명
   ownership_role ownership_role_enum NOT NULL DEFAULT 'PRIMARY_OWNER',
   primary_owner_consent_phone VARCHAR(32),            -- 공동 운전자 등록 시 본 소유주 승인 번호
@@ -179,8 +183,10 @@ CREATE TABLE public.gift_transactions (
   item_price INTEGER NOT NULL CHECK (item_price > 0),
   message_id UUID REFERENCES public.driving_messages(id) ON DELETE SET NULL, -- 답례 대상 메시지 연결
   thank_you_note TEXT,
-  payment_status payment_status_enum NOT NULL DEFAULT 'PAID',
-  coupon_code VARCHAR(64) UNIQUE NOT NULL,            -- 바코드/핀번호
+  -- [REVIEW] 기본값이 'PAID'라 결제 검증 없이 INSERT만으로 쿠폰이 발급되는 구조였음.
+  -- PG 웹훅(서버, service_role)이 결제 확인 후 PAID 전환 + coupon_code 발급하도록 변경
+  payment_status payment_status_enum NOT NULL DEFAULT 'PENDING',
+  coupon_code VARCHAR(64) UNIQUE,                     -- 바코드/핀번호 (결제 확정 후 서버에서 발급)
   redeemed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -222,11 +228,28 @@ FOR EACH ROW
 EXECUTE FUNCTION public.sync_user_honor_tier();
 
 -- 3.2 주행 종료(드라이빙 모드 해제) 시 읽은 메시지 자동 말소(Auto-Archiving) RPC 함수
+-- [REVIEW] SECURITY DEFINER가 RLS를 우회하는데 target_plate 소유 검증이 없어
+-- 누구나 임의 번호판의 알림을 말소할 수 있었음. 호출자 소유 VERIFIED 차량으로 제한하고
+-- search_path 하이재킹 방지를 위해 search_path를 고정.
 CREATE OR REPLACE FUNCTION public.dismiss_read_driving_messages(target_plate VARCHAR)
-RETURNS INTEGER AS $$
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 DECLARE
   affected_rows INTEGER;
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.vehicles v
+    WHERE v.license_plate = target_plate
+      AND v.user_id = auth.uid()
+      AND v.verification_status = 'VERIFIED'
+  ) THEN
+    RAISE EXCEPTION 'not the verified owner of plate %', target_plate
+      USING ERRCODE = '42501';
+  END IF;
+
   UPDATE public.driving_messages
   SET is_dismissed = TRUE
   WHERE receiver_plate = target_plate
@@ -236,7 +259,55 @@ BEGIN
   GET DIAGNOSTICS affected_rows = ROW_COUNT;
   RETURN affected_rows;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
+
+REVOKE ALL ON FUNCTION public.dismiss_read_driving_messages(VARCHAR) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.dismiss_read_driving_messages(VARCHAR) TO authenticated;
+
+-- 3.3 메시지 INSERT 서버측 정합성 강제
+-- [REVIEW] 클라이언트가 sender_plate_snapshot 위조, honor_points_awarded / helpful_acknowledged
+-- 자가 설정(포인트 셀프 파밍), 자기 자신에게 발송, 동일 대상 스팸이 모두 가능했음.
+CREATE OR REPLACE FUNCTION public.guard_driving_message_insert()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  sender_plate VARCHAR;
+BEGIN
+  SELECT v.license_plate INTO sender_plate
+  FROM public.vehicles v WHERE v.id = NEW.sender_vehicle_id;
+
+  NEW.sender_plate_snapshot := sender_plate;           -- 발신 번호판은 서버가 결정
+  NEW.helpful_acknowledged := FALSE;                   -- 수신자만 변경 가능
+  NEW.honor_points_awarded := 0;                       -- 포인트는 수신자 감사 시 서버가 지급
+  NEW.is_read := FALSE;
+  NEW.is_dismissed := FALSE;
+  NEW.broadcast_radius_km := CASE WHEN NEW.message_type = 'OVERLOAD_WARN' THEN 5.0 ELSE 0 END;
+  NEW.created_at := NOW();
+
+  IF NEW.receiver_plate = sender_plate THEN
+    RAISE EXCEPTION 'cannot send a message to your own vehicle' USING ERRCODE = '22023';
+  END IF;
+
+  -- 동일 대상 60초 쿨다운 (보복성 연속 발송/스팸 방지)
+  IF EXISTS (
+    SELECT 1 FROM public.driving_messages m
+    WHERE m.sender_vehicle_id = NEW.sender_vehicle_id
+      AND m.receiver_plate = NEW.receiver_plate
+      AND m.created_at > NOW() - INTERVAL '60 seconds'
+  ) THEN
+    RAISE EXCEPTION 'rate limited: wait before messaging this vehicle again' USING ERRCODE = '54000';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_guard_driving_message_insert
+BEFORE INSERT ON public.driving_messages
+FOR EACH ROW
+EXECUTE FUNCTION public.guard_driving_message_insert();
 
 -- ============================================================================
 -- 4. Row Level Security (RLS) Policies
@@ -276,3 +347,124 @@ CREATE POLICY "Allow verified owners to send driving_messages"
         AND v.verification_status = 'VERIFIED'
     )
   );
+
+-- ============================================================================
+-- 5. [REVIEW] 누락됐던 RLS 정책 & 컬럼 권한
+-- RLS를 켜놓고 SELECT/UPDATE 정책이 없어 본인 프로필·수신 메시지·선물함 조회가 전부 막혀 있었고,
+-- 반대로 UPDATE를 열 경우 사용자가 honor_points / verification_status 를 직접 조작할 수 있었음.
+-- ============================================================================
+
+-- 5.1 users: 본인 행만 조회/수정. 포인트·등급·스티커 상태는 서버(service_role)만 변경
+CREATE POLICY "Users read own profile"
+  ON public.users FOR SELECT
+  USING (id = auth.uid());
+
+CREATE POLICY "Users update own profile"
+  ON public.users FOR UPDATE
+  USING (id = auth.uid())
+  WITH CHECK (id = auth.uid());
+
+REVOKE UPDATE ON public.users FROM authenticated, anon;
+GRANT UPDATE (nickname, avatar_url, default_payment_method, sticker_shipping_address)
+  ON public.users TO authenticated;
+
+-- 5.2 vehicles: 본인 차량 CRUD. 인증 상태/OCR 점수는 OCR 검증 서버만 변경 가능
+CREATE POLICY "Owners read own vehicles"
+  ON public.vehicles FOR SELECT
+  USING (user_id = auth.uid());
+
+-- 신규 등록은 반드시 미인증 상태로만 (VERIFIED는 OCR 검증 서버만 부여)
+CREATE POLICY "Insert own vehicle as unverified"
+  ON public.vehicles FOR INSERT
+  WITH CHECK (
+    user_id = auth.uid()
+    AND verification_status IN ('UNVERIFIED', 'PENDING')
+  );
+
+CREATE POLICY "Owners update own vehicles"
+  ON public.vehicles FOR UPDATE
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+REVOKE UPDATE ON public.vehicles FROM authenticated, anon;
+GRANT UPDATE (brand, model, model_year, color, tuning_specs, garage_bio, car_wash_logs,
+              is_primary, plate_photo_url, registration_doc_url)
+  ON public.vehicles TO authenticated;
+
+-- 공개 차고(쇼룸) 뷰: VIN·소유주 실명·등록증 URL을 노출하지 않음
+CREATE OR REPLACE VIEW public.public_garages
+WITH (security_invoker = false) AS
+SELECT
+  v.id,
+  regexp_replace(v.license_plate, '^\d{2,3}', '***') AS masked_plate,
+  v.license_plate,                                   -- 정확 일치 검색용 (부분검색 API 제공 금지)
+  v.brand, v.model, v.model_year, v.color,
+  v.tuning_specs, v.garage_bio, v.car_wash_logs, v.plate_photo_url,
+  u.nickname AS owner_nickname,
+  u.honor_tier AS owner_honor_tier
+FROM public.vehicles v
+JOIN public.users u ON u.id = v.user_id
+WHERE v.verification_status = 'VERIFIED';
+
+GRANT SELECT ON public.public_garages TO anon, authenticated;
+
+-- 5.3 driving_messages: 수신 번호판의 VERIFIED 소유주 + 발신자만 조회
+CREATE POLICY "Receivers read messages to their verified plates"
+  ON public.driving_messages FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.vehicles v
+      WHERE v.license_plate = driving_messages.receiver_plate
+        AND v.user_id = auth.uid()
+        AND v.verification_status = 'VERIFIED'
+    )
+  );
+
+CREATE POLICY "Senders read own sent messages"
+  ON public.driving_messages FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.vehicles v
+      WHERE v.id = driving_messages.sender_vehicle_id
+        AND v.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Receivers update read/ack state"
+  ON public.driving_messages FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.vehicles v
+      WHERE v.license_plate = driving_messages.receiver_plate
+        AND v.user_id = auth.uid()
+        AND v.verification_status = 'VERIFIED'
+    )
+  );
+
+REVOKE UPDATE ON public.driving_messages FROM authenticated, anon;
+GRANT UPDATE (is_read, is_dismissed, helpful_acknowledged)
+  ON public.driving_messages TO authenticated;
+
+-- 5.4 gift_transactions: 보낸 사람 / 받는 번호판 VERIFIED 소유주만 조회.
+-- INSERT는 PENDING 상태로만 가능, PAID 전환·쿠폰 발급은 결제 서버(service_role) 전용
+CREATE POLICY "Senders and receivers read gifts"
+  ON public.gift_transactions FOR SELECT
+  USING (
+    sender_user_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM public.vehicles v
+      WHERE v.license_plate = gift_transactions.receiver_plate
+        AND v.user_id = auth.uid()
+        AND v.verification_status = 'VERIFIED'
+    )
+  );
+
+CREATE POLICY "Senders create pending gifts"
+  ON public.gift_transactions FOR INSERT
+  WITH CHECK (
+    sender_user_id = auth.uid()
+    AND payment_status = 'PENDING'
+    AND coupon_code IS NULL
+  );
+
+REVOKE UPDATE ON public.gift_transactions FROM authenticated, anon;

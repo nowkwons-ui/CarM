@@ -47,10 +47,8 @@ export function analyzeDriverVoiceCommand(
   bufferVehicles: ScannedBufferVehicle[]
 ): VoiceCommandAnalysis {
   const normalized = rawSpeech.trim();
-  const wakeWordDetected =
-    normalized.includes('헤이 플레이트') ||
-    normalized.includes('플레이트') ||
-    normalized.length > 0;
+  // [REVIEW] 기존 `|| normalized.length > 0` 때문에 아무 발화나 웨이크워드로 인식됨 (차 안 대화 오발송 위험)
+  const wakeWordDetected = /(헤이|hey)\s*플레이트/i.test(normalized);
 
   // 1. 타겟 차량 매칭 (번호판 끝자리, 색상, 차종, 차선 키워드 기반)
   let matchedVehicle: ScannedBufferVehicle | null = null;
@@ -73,11 +71,8 @@ export function analyzeDriverVoiceCommand(
     }
   }
 
-  if (!matchedVehicle && bufferVehicles.length > 0) {
-    // 기본값: 전방 중앙 차선(가장 가까운 차량)
-    matchedVehicle =
-      bufferVehicles.find((v) => v.lane === 'CENTER') || bufferVehicles[0];
-  }
+  // [REVIEW] 기존엔 매칭 실패 시 임의로 중앙 차선 차량에 발송 → 엉뚱한 차량 오발송 위험.
+  // 매칭 실패 시 null 을 반환하고, 호출부가 운전자가 명시적으로 선택한 타겟을 사용하도록 함.
 
   // 2. 공격성/욕설 포함 여부 검사
   const hadProfanityOrAggression = PROFANITY_OR_AGGRESSION_KEYWORDS.some((kw) =>

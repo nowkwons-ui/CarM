@@ -66,11 +66,14 @@ export function runOcrCrossVerification(
       : `원 소유주(${cleanDocOwner})의 공동운전자 SMS 승인 대기중`;
   } else {
     // CORPORATE_LEASE
-    ownerMatched =
+    // [REVIEW] 기존엔 소유주명에 '캐피탈'/'렌터카' 문자열만 있으면 통과(또는 OR 조건)해
+    // 아무 법인명이나 입력하면 인증되는 우회 경로였음. 법인 명의 + 임대계약서 실운전자 확인을 AND 로 요구.
+    const isCorporateOwner =
       cleanDocOwner.includes('주식회사') ||
+      cleanDocOwner.includes('(주)') ||
       cleanDocOwner.includes('캐피탈') ||
-      cleanDocOwner.includes('렌터카') ||
-      Boolean(input.coDriverConsentVerified);
+      cleanDocOwner.includes('렌터카');
+    ownerMatched = isCorporateOwner && Boolean(input.coDriverConsentVerified);
     ownerNote = ownerMatched
       ? `법인/리스 계약서 실운전자(${cleanUserRealName}) 특약 교차확인 완료`
       : `리스/렌트 계약서 임차인 명의 확인 필요`;
