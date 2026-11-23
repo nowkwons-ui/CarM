@@ -81,6 +81,7 @@ export default function DrivingHudTab() {
     triggerSimulatedIncomingAlert,
     acknowledgeHelpfulMessage,
     openQuickGiftModal,
+    addHonorPoints,
     showToast,
   } = usePlateTalk();
 
@@ -934,6 +935,45 @@ export default function DrivingHudTab() {
                       }`}
                     >
                       🔊 부품 문의 수신
+                    </button>
+                  </div>
+                </div>
+
+                {/* 명예 포인트 적립 시뮬레이션 */}
+                <div className="space-y-2">
+                  <span className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-stone-500' : 'text-zinc-400'}`}>
+                    명예 포인트 적립 시뮬레이션
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      id="honor-sim-helpful-btn"
+                      onClick={() => {
+                        addHonorPoints(50, '위험 고지 수신자 [도움 됐어요] 감사 표시');
+                        showToast('+50 PT가 적립되었습니다.', 'emerald');
+                      }}
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-left transition ${
+                        isLight
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 shadow-sm'
+                          : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25'
+                      }`}
+                    >
+                      +50 PT (도움 됐어요)
+                    </button>
+                    <button
+                      type="button"
+                      id="honor-sim-yield-btn"
+                      onClick={() => {
+                        addHonorPoints(30, '끼어들기 양보운전 감사 수신');
+                        showToast('+30 PT가 적립되었습니다.', 'sky');
+                      }}
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-left transition ${
+                        isLight
+                          ? 'bg-blue-50 border-blue-300 text-blue-800 hover:bg-blue-100 shadow-sm'
+                          : 'bg-blue-500/15 border-blue-500/30 text-blue-300 hover:bg-blue-500/25'
+                      }`}
+                    >
+                      +30 PT (양보 감사)
                     </button>
                   </div>
                 </div>
