@@ -16,6 +16,9 @@ import {
   CheckCircle2,
   Eye,
   Car,
+  Award,
+  Camera,
+  Radio,
 } from 'lucide-react';
 import { usePlateTalk } from '@/context/PlateTalkContext';
 import { runOcrCrossVerification, OcrVerificationResult } from '@/lib/ocrEngine';
@@ -194,17 +197,81 @@ export default function GarageAuthTab() {
 
   return (
     <div className="space-y-6">
+      {/* 대표 차량 상태 요약, 명예 포인트 및 하드웨어 카메라 연동 */}
+      <div className="rounded-3xl border border-white/10 bg-zinc-900/90 p-5 backdrop-blur-md">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+              <Car className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xl font-black tracking-wider text-white">
+                  {activeVehicle.license_plate}
+                </span>
+                {renderStatusBadge(activeVehicle.verification_status)}
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                {activeVehicle.brand} {activeVehicle.model} ({activeVehicle.color}) · 차대번호: {activeVehicle.vin.slice(0, 8)}*********
+              </p>
+            </div>
+          </div>
+
+          {/* 명예 포인트 배지 */}
+          <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-zinc-950 border border-white/10">
+            <Award className="h-5 w-5 text-amber-400" />
+            <div>
+              <span className="text-[10px] text-zinc-400 font-bold block">내 명예 포인트</span>
+              <span className="font-mono font-extrabold text-sm text-white">
+                {user.honor_points.toLocaleString()}P <span className="text-blue-400 text-xs">({user.honor_tier})</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* HUD 카메라 입력 소스 설정 */}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs text-zinc-300 font-semibold">
+            <Camera className="h-4 w-4 text-blue-400" />
+            <span>HUD 비전 카메라 연동 모드:</span>
+          </div>
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-950 border border-white/10">
+            <button
+              type="button"
+              className="px-3 py-1 rounded-lg text-xs font-bold bg-blue-600/30 text-blue-300 border border-blue-500/50 flex items-center gap-1"
+            >
+              <Wifi className="h-3.5 w-3.5" />
+              <span>블랙박스 RTSP</span>
+            </button>
+            <button
+              type="button"
+              className="px-3 py-1 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white flex items-center gap-1"
+            >
+              <Radio className="h-3.5 w-3.5" />
+              <span>액션캠</span>
+            </button>
+            <button
+              type="button"
+              className="px-3 py-1 rounded-lg text-xs font-semibold text-zinc-400 hover:text-white flex items-center gap-1"
+            >
+              <Camera className="h-3.5 w-3.5" />
+              <span>내장 카메라</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* 상단: 현재 차량 인증 상태 및 권한 테스터 바 */}
-      <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-5 sm:p-6">
+      <div className="rounded-3xl border border-white/10 bg-zinc-900/90 p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <span className="text-xs font-bold tracking-wider text-sky-400 uppercase">
+            <span className="text-xs font-bold tracking-wider text-blue-400 uppercase">
               3-STAGE VEHICLE OWNER VERIFICATION PIPELINE
             </span>
             <h2 className="mt-1 text-xl font-extrabold text-white">
               [3.1] 3단계 차량 소유주 OCR 교차 인증 및 다중 차량 관리
             </h2>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-zinc-400">
               단순 번호판 입력 도용을 막기 위해 [소셜+PASS 실명인증] → [차량사진+자동차등록증 OCR 교차검증] → [소유주/공동운전자 권한]을 검증합니다.
             </p>
           </div>

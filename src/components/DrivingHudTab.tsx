@@ -5,23 +5,21 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Mic,
   MicOff,
-  Radio,
-  ShieldAlert,
-  Sparkles,
   Volume2,
   Gift,
   AlertTriangle,
+  Power,
+  ThumbsUp,
+  Settings,
+  Sparkles,
+  ShieldAlert,
+  HeartHandshake,
+  Car,
+  X,
+  Send,
   Camera,
   Wifi,
-  Power,
-  Send,
-  ThumbsUp,
-  HelpCircle,
-  HeartHandshake,
-  Eye,
-  ShieldCheck,
-  Navigation,
-  X,
+  Radio,
 } from 'lucide-react';
 import { usePlateTalk } from '@/context/PlateTalkContext';
 import {
@@ -36,31 +34,31 @@ const VOICE_PRESET_COMMANDS = [
     id: 'preset-brake',
     label: '브레이크등 고장 알림 (음성)',
     speech: '헤이 플레이트, 앞에 흰색 쏘나타 4568에게 브레이크등 나갔다고 알려줘',
-    badge: '1-1 차량이상',
+    badge: '차량이상',
   },
   {
     id: 'preset-rage-sanitize',
     label: '거친 발화 → AI 정중 순화 테스트',
     speech: '헤이 플레이트, 아 진짜 앞에 4568 브레이크등 고장났잖아 위험하게 왜 저래!',
-    badge: 'AI 욕설/시비 필터링',
+    badge: 'AI 필터링',
   },
   {
     id: 'preset-overload',
     label: '화물차 낙하물 경고 + 5km 브로드캐스트',
     speech: '헤이 플레이트, 우측 9104 화물트럭 적재물 낙하 위험 경고해줘',
-    badge: '1-2 과적/5km공유',
+    badge: '화물낙하',
   },
   {
     id: 'preset-tuning',
     label: '루프박스·휠 모델명 문의',
     speech: '헤이 플레이트, 좌측 쏘렌토 8821 차량에 장착한 루프박스 모델명이 궁금합니다',
-    badge: '1-3 튜닝문의',
+    badge: '튜닝문의',
   },
   {
     id: 'preset-yield',
     label: '끼어들기 양보운전 감사 인사',
     speech: '헤이 플레이트, 끝자리 4568 차량에게 방금 차선 양보해줘서 고맙다고 전해줘',
-    badge: '1-5 양보감사',
+    badge: '양보감사',
   },
 ];
 
@@ -79,16 +77,20 @@ export default function DrivingHudTab() {
     triggerSimulatedIncomingAlert,
     acknowledgeHelpfulMessage,
     openQuickGiftModal,
-    setActiveTab,
     showToast,
   } = usePlateTalk();
 
+  // 카메라 스트림 상태
   const [cameraSource, setCameraSource] = useState<
     'BLACKBOX_RTSP' | 'ACTION_CAM' | 'WEBRTC_CAM'
   >('BLACKBOX_RTSP');
   const [webcamActive, setWebcamActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
+  // 시뮬레이터 및 데모 드로어(Drawer) 상태
+  const [isDemoDrawerOpen, setIsDemoDrawerOpen] = useState(false);
+
+  // 음성인식(STT) 및 AI 상태
   const [isListeningStt, setIsListeningStt] = useState(false);
   const [voiceInputText, setVoiceInputText] = useState(
     '헤이 플레이트, 앞에 흰색 쏘나타 4568에게 브레이크등 나갔다고 알려줘'
@@ -99,10 +101,6 @@ export default function DrivingHudTab() {
       scannedVehicles
     )
   );
-
-  const selectedVehicle =
-    scannedVehicles.find((v) => v.license_plate === selectedTargetPlate) ||
-    scannedVehicles[0];
 
   // WebRTC 실제 카메라 연결/해제 처리
   useEffect(() => {
@@ -132,7 +130,7 @@ export default function DrivingHudTab() {
             if (!cancelled) {
               setWebcamActive(false);
               showToast(
-                '브라우저 카메라 권한이 없어 시뮬레이션 스트림으로 표시합니다.',
+                '카메라 권한을 확인해 주세요. 시뮬레이션 화면으로 표시됩니다.',
                 'amber'
               );
             }
@@ -165,7 +163,6 @@ export default function DrivingHudTab() {
       (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
 
     if (!SpeechRecognitionCtor) {
-      // 마이크 미지원 환경에서는 시뮬레이션 파형 작동 후 프리셋 순환
       setIsListeningStt(true);
       setTimeout(() => {
         setIsListeningStt(false);
@@ -174,11 +171,8 @@ export default function DrivingHudTab() {
             Math.floor(Math.random() * VOICE_PRESET_COMMANDS.length)
           ];
         handleVoiceTextChange(nextPreset.speech);
-        showToast(
-          `웨이크워드 감지 완료: "${nextPreset.speech}"`,
-          'sky'
-        );
-      }, 1800);
+        showToast(`음성 인식됨: "${nextPreset.speech}"`, 'sky');
+      }, 1500);
       return;
     }
 
@@ -195,15 +189,12 @@ export default function DrivingHudTab() {
         const transcript = event.results?.[0]?.[0]?.transcript || '';
         if (transcript) {
           handleVoiceTextChange(transcript);
+          showToast(`인식: "${transcript}"`, 'sky');
         }
         setIsListeningStt(false);
       };
       recognition.onerror = () => {
         setIsListeningStt(false);
-        showToast(
-          '마이크 입력 대신 음성 시뮬레이션 프리셋을 사용할 수 있습니다.',
-          'amber'
-        );
       };
       recognition.onend = () => setIsListeningStt(false);
       recognition.start();
@@ -215,7 +206,7 @@ export default function DrivingHudTab() {
   const handleSendAnalyzedVoiceCommand = () => {
     if (aiAnalysis.blockedEntirely) {
       showToast(
-        aiAnalysis.blockReason || '보복/욕설 발화는 전송이 차단됩니다.',
+        aiAnalysis.blockReason || '보복성 표현은 전송이 차단됩니다.',
         'rose'
       );
       return;
@@ -224,7 +215,7 @@ export default function DrivingHudTab() {
     if (aiAnalysis.requiresTargetConfirmation && !aiAnalysis.matchedVehicle) {
       showToast(
         aiAnalysis.confirmationReason ||
-          '수신 차량을 특정하지 못했습니다. 화면의 번호판을 터치해 선택한 후 발송해 주세요.',
+          '수신 차량을 화면에서 터치하여 선택해 주세요.',
         'amber'
       );
       return;
@@ -244,7 +235,7 @@ export default function DrivingHudTab() {
 
     if (res.ok) {
       speakDrivingBriefing(
-        `${targetPlate} 차량에게 정중하게 정제된 안전 메시지를 발송했습니다.`
+        `${targetPlate} 차량에 정제된 안전 메시지를 전송했습니다.`
       );
     }
   };
@@ -258,7 +249,7 @@ export default function DrivingHudTab() {
       receiverPlate: selectedTargetPlate,
       messageType: type,
       content: templateText,
-      rawVoiceTranscript: `[원터치/음성 단축키] ${templateText}`,
+      rawVoiceTranscript: `[원터치] ${templateText}`,
       aiSanitized: true,
       broadcastRadiusKm: broadcastKm,
     });
@@ -266,112 +257,64 @@ export default function DrivingHudTab() {
     if (res.ok) {
       speakDrivingBriefing(
         broadcastKm > 0
-          ? `${selectedTargetPlate} 화물 차량 경고 및 반경 5킬로미터 방어운전 브로드캐스트를 완료했습니다.`
-          : `${selectedTargetPlate} 차량에게 메시지를 발송했습니다.`
+          ? `${selectedTargetPlate} 화물 경고 및 반경 5km 공유 완료`
+          : `${selectedTargetPlate} 차량에 전송 완료`
       );
     }
   };
 
   return (
-    <div className="space-y-5">
-      {/* 1. 상단 드라이빙 HUD 텔레메트리 및 주행모드 제어 바 */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800/90 bg-slate-900/90 px-4 py-3.5 backdrop-blur-md">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${
-                isDrivingMode
-                  ? 'animate-ping bg-emerald-400'
-                  : 'bg-slate-500'
-              }`}
-            />
-            <span className="text-xs font-semibold tracking-wider text-emerald-400 uppercase">
-              {isDrivingMode ? 'HANDS-FREE HUD ACTIVE' : 'PARKING / STANDBY MODE'}
-            </span>
-          </div>
-
-          <span className="hidden text-slate-700 sm:inline">|</span>
-
-          {/* 하드웨어 카메라 소스 선택 */}
-          <div className="flex items-center gap-1.5 rounded-xl bg-slate-950/90 p-1 border border-slate-800">
-            <button
-              type="button"
-              id="cam-source-blackbox"
-              onClick={() => setCameraSource('BLACKBOX_RTSP')}
-              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition ${
-                cameraSource === 'BLACKBOX_RTSP'
-                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Wifi className="h-3.5 w-3.5" />
-              <span>블랙박스 RTSP</span>
-            </button>
-            <button
-              type="button"
-              id="cam-source-actioncam"
-              onClick={() => setCameraSource('ACTION_CAM')}
-              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition ${
-                cameraSource === 'ACTION_CAM'
-                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Radio className="h-3.5 w-3.5" />
-              <span>액션캠 연동</span>
-            </button>
-            <button
-              type="button"
-              id="cam-source-webrtc"
-              onClick={() => setCameraSource('WEBRTC_CAM')}
-              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition ${
-                cameraSource === 'WEBRTC_CAM'
-                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Camera className="h-3.5 w-3.5" />
-              <span>내장 카메라</span>
-            </button>
-          </div>
+    <div className="relative flex flex-col h-full w-full overflow-hidden bg-zinc-950 select-none">
+      {/* ─────────────────────────────────────────────────────────────
+          ① 상단 헤더 (초슬림, 높이 56px 이하)
+          - 좌측: 내 차 번호판 배지 (12라 3466)
+          - 우측: [🔴 주행 종료] + [⚙️ 데모]
+         ───────────────────────────────────────────────────────────── */}
+      <header className="h-14 shrink-0 px-4 flex items-center justify-between border-b border-white/10 bg-zinc-950/90 backdrop-blur-md z-20">
+        {/* 좌측 내 차 번호판 */}
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/10">
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="font-mono text-base font-black tracking-wider text-white">
+            {activeVehicle.license_plate}
+          </span>
         </div>
 
-        {/* 주행 종료 & 읽은 알림 자동 말소 버튼 */}
-        <div className="flex items-center gap-2.5">
-          {activeVehicle.verification_status !== 'VERIFIED' && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('GARAGE')}
-              className="flex items-center gap-1.5 rounded-xl bg-amber-500/20 border border-amber-400/40 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/30 transition"
-            >
-              <Eye className="h-3.5 w-3.5" />
-              <span>미인증 눈팅모드 (OCR 인증하러 가기)</span>
-            </button>
-          )}
-
+        {/* 우측 주행 제어 및 데모 드로어 버튼 */}
+        <div className="flex items-center gap-2">
           <button
             type="button"
             id="toggle-driving-mode-btn"
             onClick={toggleDrivingMode}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
+            className={`min-h-[40px] px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition ${
               isDrivingMode
-                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
-                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400 hover:bg-rose-500/25'
+                : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
             }`}
           >
             <Power className="h-3.5 w-3.5" />
-            <span>
-              {isDrivingMode
-                ? '주행 종료 (읽은 알림 자동 말소)'
-                : '드라이빙 HUD 재시작'}
-            </span>
+            <span>{isDrivingMode ? '🔴 주행 종료' : '🟢 주행 시작'}</span>
+          </button>
+
+          <button
+            type="button"
+            id="open-demo-drawer-btn"
+            onClick={() => setIsDemoDrawerOpen(true)}
+            className="min-h-[40px] px-3 rounded-xl bg-zinc-900 border border-white/10 text-zinc-300 hover:text-white flex items-center gap-1.5 text-xs font-semibold transition"
+            aria-label="데모 및 시뮬레이션 설정 열기"
+          >
+            <Settings className="h-4 w-4 text-zinc-400" />
+            <span className="hidden sm:inline">데모</span>
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* 2. 메인 전방 블랙박스/카메라 ALPR 비전 뷰포트 */}
-      <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl">
-        <div className="relative aspect-[16/9] w-full min-h-[300px] sm:min-h-[420px]">
+      {/* ─────────────────────────────────────────────────────────────
+          ② 중앙 메인 뷰 (전방 카메라 + 대형 번호판 태그 + 하단 대형 칩 3개 + 알림 팝업)
+          화면의 약 55~60% 차지
+         ───────────────────────────────────────────────────────────── */}
+      <section className="relative flex-1 min-h-0 w-full overflow-hidden bg-black flex flex-col justify-between">
+        {/* 카메라 피드 또는 로드뷰 배경 */}
+        <div className="absolute inset-0 z-0">
           {cameraSource === 'WEBRTC_CAM' && webcamActive ? (
             <video
               ref={videoRef}
@@ -383,35 +326,20 @@ export default function DrivingHudTab() {
           ) : (
             <img
               src="/assets/dashcam-road.jpg"
-              alt="PlateTalk 전방 블랙박스 실시간 비전 스트림"
-              className="h-full w-full object-cover brightness-95 contrast-105"
+              alt="전방 로드 뷰"
+              className="h-full w-full object-cover brightness-90 contrast-105"
             />
           )}
+          {/* 절제된 비네팅 오버레이 */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/80 pointer-events-none" />
+        </div>
 
-          {/* 다크 비네팅 오버레이 */}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/75" />
-
-          {/* 상단 HUD 헤드업 상태 표시줄 */}
-          <div className="absolute top-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 rounded-xl bg-slate-950/85 px-3 py-1.5 text-xs font-mono text-sky-300 border border-sky-500/30 backdrop-blur-md">
-              <Navigation className="h-3.5 w-3.5 text-sky-400" />
-              <span>ALPR VISION v4.2 · 60 FPS</span>
-              <span className="text-slate-600">|</span>
-              <span className="text-emerald-400">
-                내 차: {activeVehicle.license_plate} ({activeVehicle.verification_status})
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 rounded-xl bg-slate-950/85 px-3 py-1.5 text-xs font-medium text-amber-300 border border-amber-500/30 backdrop-blur-md">
-              <ShieldAlert className="h-3.5 w-3.5 text-amber-400" />
-              <span>반경 5km 위험 브로드캐스트 레이더 가동 중</span>
-            </div>
-          </div>
-
-          {/* 실시간 번호판 객체 탐지(Bounding Box) 오버레이 */}
+        {/* 카메라 화면 위 번호판 객체 터치 태그 (대형 타이포그래피 text-2xl font-black) */}
+        <div className="absolute inset-0 pointer-events-none z-10">
           {scannedVehicles.map((veh) => {
             const isSelected = veh.license_plate === selectedTargetPlate;
-            const isTruck = veh.vehicleType === 'CARGO_TRUCK';
+            const isCargo = veh.vehicleType === 'CARGO_TRUCK';
+
             return (
               <button
                 key={veh.id}
@@ -424,490 +352,513 @@ export default function DrivingHudTab() {
                   width: `${veh.bbox.widthPercent}%`,
                   height: `${veh.bbox.heightPercent}%`,
                 }}
-                className={`group absolute rounded-xl transition-all duration-200 focus:outline-none ${
+                className={`pointer-events-auto absolute rounded-2xl transition-all duration-200 focus:outline-none flex items-start justify-center ${
                   isSelected
-                    ? isTruck
-                      ? 'border-2 border-amber-400 bg-amber-500/15 shadow-[0_0_25px_rgba(251,191,36,0.45)]'
-                      : 'border-2 border-emerald-400 bg-emerald-500/15 shadow-[0_0_25px_rgba(16,185,129,0.45)]'
-                    : 'border border-sky-400/70 bg-sky-500/10 hover:border-sky-300'
+                    ? isCargo
+                      ? 'border-2 border-amber-400 bg-amber-500/20 shadow-[0_0_30px_rgba(245,158,11,0.5)]'
+                      : 'border-2 border-blue-500 bg-blue-500/20 shadow-[0_0_30px_rgba(59,130,246,0.6)]'
+                    : 'border border-white/20 bg-black/20 hover:border-white/50'
                 }`}
               >
-                {/* 번호판 OCR 캡션 플로팅 태그 */}
+                {/* Tesla/CarPlay 스타일 대형 번호판 플로팅 태그 */}
                 <div
-                  className={`absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg px-2.5 py-1 text-[11px] font-bold tracking-tight shadow-lg backdrop-blur-md transition ${
+                  className={`-translate-y-full mb-1.5 px-3 py-1 rounded-xl shadow-2xl backdrop-blur-md font-mono text-xl sm:text-2xl font-black tracking-wider transition ${
                     isSelected
-                      ? isTruck
-                        ? 'bg-amber-400 text-slate-950'
-                        : 'bg-emerald-400 text-slate-950'
-                      : 'bg-slate-950/90 text-sky-200 border border-sky-400/40'
+                      ? isCargo
+                        ? 'bg-amber-500 text-black shadow-amber-500/50'
+                        : 'bg-blue-600 text-white shadow-blue-500/50'
+                      : 'bg-black/80 text-white border border-white/20'
                   }`}
                 >
-                  <span>{veh.license_plate}</span>
-                  <span className="ml-1.5 opacity-80 font-mono text-[10px]">
-                    {veh.distanceMeters}m
-                  </span>
-                </div>
-
-                {/* 하단 차종 및 상태 배지 */}
-                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-950/90 px-2 py-0.5 text-[10px] font-medium text-slate-200 border border-slate-700/80">
-                  {veh.color} {veh.model}
+                  {veh.license_plate}
                 </div>
               </button>
             );
           })}
-
-          {/* [3.2.3] 주행 중 수신 메시지 대형 HUD 브리핑 카드 */}
-          <AnimatePresence>
-            {activeHudIncomingMessage && (
-              <motion.div
-                initial={{ opacity: 0, y: 24, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 20, scale: 0.96 }}
-                className="absolute bottom-4 left-4 right-4 z-20 rounded-2xl border border-emerald-400/50 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-xl sm:p-5"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                        activeHudIncomingMessage.message_type === 'OVERLOAD_WARN'
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-400/40'
-                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
-                      }`}
-                    >
-                      <Volume2 className="h-5 w-5 animate-pulse" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-300">
-                          {isTtsSpeaking
-                            ? 'TTS 음성 자동 브리핑 중...'
-                            : 'TTS 음성 브리핑 완료 (주행 종료 시 자동 말소 예정)'}
-                        </span>
-                        <span className="text-xs font-mono text-sky-300">
-                          발신 번호판: {activeHudIncomingMessage.sender_plate_snapshot}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-xs text-slate-400">
-                        {activeHudIncomingMessage.sender_vehicle_summary} ·{' '}
-                        {activeHudIncomingMessage.location_name}
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={dismissHudOverlayCard}
-                    className="rounded-lg bg-slate-800/80 p-1.5 text-slate-400 hover:text-white"
-                    aria-label="HUD 알림 카드 닫기"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <p className="mt-3 text-sm font-semibold leading-relaxed text-white sm:text-base">
-                  “{activeHudIncomingMessage.content}”
-                </p>
-
-                {/* 원클릭 감사 표시(+50 명예포인트) 및 커피 답례 플로우 */}
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/90 pt-3">
-                  <div className="flex items-center gap-2 text-xs text-amber-300">
-                    <Gift className="h-4 w-4 shrink-0" />
-                    <span>
-                      “커피 한 잔이나 주유권으로 고마운 운전자에게 즉시 보답하시겠습니까?”
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      id="hud-helpful-ack-btn"
-                      disabled={activeHudIncomingMessage.helpful_acknowledged}
-                      onClick={() =>
-                        acknowledgeHelpfulMessage(activeHudIncomingMessage.id)
-                      }
-                      className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition ${
-                        activeHudIncomingMessage.helpful_acknowledged
-                          ? 'bg-slate-800 text-emerald-400 cursor-default'
-                          : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
-                      }`}
-                    >
-                      <ThumbsUp className="h-3.5 w-3.5" />
-                      <span>
-                        {activeHudIncomingMessage.helpful_acknowledged
-                          ? '도움 됐어요 완료 (+50pt 지급됨)'
-                          : '도움 됐어요 (+50 명예포인트)'}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      id="hud-oneclick-gift-btn"
-                      onClick={() =>
-                        openQuickGiftModal(
-                          activeHudIncomingMessage.sender_plate_snapshot,
-                          activeHudIncomingMessage.sender_vehicle_summary,
-                          activeHudIncomingMessage.id
-                        )
-                      }
-                      className="flex items-center gap-1.5 rounded-xl bg-amber-400 px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-amber-300 transition"
-                    >
-                      <Gift className="h-3.5 w-3.5" />
-                      <span>원클릭 커피/주유권 답례하기</span>
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
-        {/* 3. 최근 3분 내 마주친 차량 로컬 버퍼 리스트 */}
-        <div className="border-t border-slate-800/90 bg-slate-900/95 p-4">
-          <div className="mb-2.5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold tracking-wider text-sky-400 uppercase">
-                RECENT 3-MIN LOCAL BUFFER
-              </span>
-              <span className="text-xs text-slate-400">
-                (최근 3분 내 인식된 주변 차량 · 터치 또는 음성으로 타겟 전환)
-              </span>
-            </div>
-            <span className="text-xs font-mono text-emerald-400">
-              현재 타겟: [{selectedTargetPlate}]
-            </span>
+        {/* 최상단 가벼운 타겟 안내 (군더더기 텍스트 제거) */}
+        <div className="relative z-10 p-3 flex items-center justify-between pointer-events-none">
+          <div className="pointer-events-auto px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-xs font-bold text-zinc-300">
+            타겟: <span className="font-mono text-blue-400 font-extrabold">{selectedTargetPlate}</span>
           </div>
+          {isTtsSpeaking && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-600/90 text-white text-xs font-bold animate-pulse">
+              <Volume2 className="h-3.5 w-3.5" />
+              <span>TTS 브리핑 중</span>
+            </div>
+          )}
+        </div>
 
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+        {/* 수신 알림 팝업 오버레이 (Toast Overlay) */}
+        <AnimatePresence>
+          {activeHudIncomingMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: 30, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.96 }}
+              className="relative z-30 mx-3 mb-2 rounded-2xl border border-white/15 bg-black/85 backdrop-blur-xl p-4 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xl sm:text-2xl font-black tracking-wider text-blue-400">
+                    {activeHudIncomingMessage.sender_plate_snapshot}
+                  </span>
+                  <span className="text-xs text-zinc-400 font-medium">
+                    {activeHudIncomingMessage.sender_vehicle_summary}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={dismissHudOverlayCard}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-white"
+                  aria-label="알림 닫기"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* 핵심 한 줄 메시지 (text-xl font-bold, 최대 2줄) */}
+              <p className="mt-2 text-lg sm:text-xl font-bold leading-snug text-white line-clamp-2">
+                “{activeHudIncomingMessage.content}”
+              </p>
+
+              {/* 하단 2개 대형 버튼 (min-h-[56px]) */}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  id="hud-helpful-ack-btn"
+                  disabled={activeHudIncomingMessage.helpful_acknowledged}
+                  onClick={() =>
+                    acknowledgeHelpfulMessage(activeHudIncomingMessage.id)
+                  }
+                  className={`min-h-[56px] rounded-xl px-4 flex items-center justify-center gap-2 font-bold text-base transition ${
+                    activeHudIncomingMessage.helpful_acknowledged
+                      ? 'bg-zinc-800 text-emerald-400 cursor-default'
+                      : 'bg-emerald-500 text-black hover:bg-emerald-400 active:scale-95'
+                  }`}
+                >
+                  <ThumbsUp className="h-5 w-5" />
+                  <span>
+                    {activeHudIncomingMessage.helpful_acknowledged
+                      ? '감사 완료'
+                      : '👍 감사 (+50P)'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  id="hud-oneclick-gift-btn"
+                  onClick={() =>
+                    openQuickGiftModal(
+                      activeHudIncomingMessage.sender_plate_snapshot,
+                      activeHudIncomingMessage.sender_vehicle_summary,
+                      activeHudIncomingMessage.id
+                    )
+                  }
+                  className="min-h-[56px] rounded-xl px-4 bg-amber-400 text-black hover:bg-amber-300 font-bold text-base flex items-center justify-center gap-2 active:scale-95 transition"
+                >
+                  <Gift className="h-5 w-5" />
+                  <span>☕ 커피 선물</span>
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* 카메라 하단 가로형 대형 칩(Chip) 3개 (주변 차량 원터치 선택) */}
+        <div className="relative z-10 px-3 pb-2 pt-1">
+          <div className="grid grid-cols-3 gap-2">
             {scannedVehicles.map((v) => {
               const isSelected = v.license_plate === selectedTargetPlate;
+              const isCargo = v.vehicleType === 'CARGO_TRUCK';
+
               return (
                 <button
                   key={v.id}
                   type="button"
                   id={`buffer-select-${v.id}`}
                   onClick={() => setSelectedTargetPlate(v.license_plate)}
-                  className={`flex flex-col justify-between rounded-2xl p-3 text-left transition ${
+                  className={`min-h-[52px] rounded-2xl px-2.5 py-1.5 flex flex-col justify-center text-left transition-all active:scale-95 ${
                     isSelected
-                      ? 'bg-emerald-500/15 border-2 border-emerald-400/80 shadow-lg'
-                      : 'bg-slate-950/80 border border-slate-800 hover:border-slate-700'
+                      ? isCargo
+                        ? 'bg-amber-500 text-black border-2 border-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.5)]'
+                        : 'bg-blue-600 text-white border-2 border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.6)]'
+                      : 'bg-zinc-950/85 backdrop-blur-md border border-white/10 text-zinc-300 hover:border-white/30'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="rounded-lg bg-slate-900 px-2.5 py-1 font-mono text-sm font-bold text-white border border-slate-700">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-mono text-sm sm:text-base font-black tracking-wide truncate">
                       {v.license_plate}
                     </span>
-                    <span className="text-[11px] font-mono text-sky-400">
-                      OCR {v.ocrConfidence}% · {v.distanceMeters}m
-                    </span>
+                    {isCargo ? (
+                      <AlertTriangle className={`h-3.5 w-3.5 shrink-0 ${isSelected ? 'text-black' : 'text-amber-400'}`} />
+                    ) : (
+                      <Car className={`h-3.5 w-3.5 shrink-0 ${isSelected ? 'text-white' : 'text-zinc-400'}`} />
+                    )}
                   </div>
-                  <div className="mt-2">
-                    <p className="text-xs font-semibold text-slate-200">
-                      {v.brand} {v.model} ({v.color})
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-amber-300/90">
-                      {v.suspectedIssue || v.tuningHighlight}
-                    </p>
-                  </div>
+                  <span
+                    className={`text-[11px] font-semibold truncate ${
+                      isSelected
+                        ? isCargo
+                          ? 'text-black/80'
+                          : 'text-white/80'
+                        : 'text-zinc-400'
+                    }`}
+                  >
+                    {v.color} {v.model}
+                  </span>
                 </button>
               );
             })}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* 4. 웨이크워드("헤이 플레이트") 음성 발송(STT) & AI 욕설 안전 필터링 콘솔 */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-5 lg:col-span-7">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
-                <Mic className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-white">
-                  웨이크워드 음성 명령 (STT) & AI 안전 필터링
-                </h2>
-                <p className="text-xs text-slate-400">
-                  “헤이 플레이트” 발화 시 타겟 차량 자동 매칭 후 정중한 템플릿으로 정제하여 발송합니다.
-                </p>
-              </div>
-            </div>
+      {/* ─────────────────────────────────────────────────────────────
+          ③ 하단 컨트롤 독 (화면의 약 30% 차지, 직관적 원터치)
+          대형 마이크 1개 + 4개 원터치 퀵 버튼 (2x2 그리드)
+         ───────────────────────────────────────────────────────────── */}
+      <footer className="shrink-0 p-3 bg-zinc-950 border-t border-white/10 z-20">
+        <div className="flex items-stretch gap-3">
+          {/* 중앙/좌측 대형 마이크 버튼 (헤이 플레이트) */}
+          <button
+            type="button"
+            id="start-stt-voice-btn"
+            onClick={handleStartWebSpeechStt}
+            className={`w-28 sm:w-32 shrink-0 rounded-2xl flex flex-col items-center justify-center p-2.5 transition active:scale-95 ${
+              isListeningStt
+                ? 'bg-blue-600 text-white shadow-[0_0_35px_rgba(59,130,246,0.85)] border-2 border-white animate-pulse'
+                : 'bg-zinc-900 border border-blue-500/40 text-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.2)] hover:border-blue-400'
+            }`}
+          >
+            {isListeningStt ? (
+              <>
+                <MicOff className="h-8 w-8 text-white mb-1" />
+                <span className="text-xs font-black tracking-tight">듣는 중...</span>
+                <div className="mt-1 flex items-center gap-1">
+                  <span className="h-2 w-1 bg-white rounded-full animate-bounce" />
+                  <span className="h-3 w-1 bg-white rounded-full animate-bounce [animation-delay:0.15s]" />
+                  <span className="h-2 w-1 bg-white rounded-full animate-bounce [animation-delay:0.3s]" />
+                </div>
+              </>
+            ) : (
+              <>
+                <Mic className="h-8 w-8 text-blue-400 mb-1" />
+                <span className="text-xs font-black tracking-tight text-white">헤이 플레이트</span>
+                <span className="text-[10px] font-semibold text-blue-400 mt-0.5">음성 명령</span>
+              </>
+            )}
+          </button>
 
+          {/* 4개 원터치 퀵 버튼 (2x2 그리드, 설명 없이 큼직한 아이콘 + 단어) */}
+          <div className="flex-1 grid grid-cols-2 gap-2">
+            {/* 1. 차량 이상 */}
             <button
               type="button"
-              id="start-stt-voice-btn"
-              onClick={handleStartWebSpeechStt}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition ${
-                isListeningStt
-                  ? 'bg-rose-500 text-white animate-pulse'
-                  : 'bg-sky-400 text-slate-950 hover:bg-sky-300'
-              }`}
+              id="quick-send-defect-btn"
+              onClick={() =>
+                handleQuickCategorySend(
+                  'DEFECT_ALERT',
+                  '[차량 이상 알림] 브레이크등 또는 주유구 커버 상태를 확인해 주세요!'
+                )
+              }
+              className="min-h-[56px] rounded-2xl bg-zinc-900 border border-white/10 hover:border-blue-500/50 p-2.5 flex items-center gap-2.5 text-left active:scale-95 transition"
             >
-              {isListeningStt ? (
-                <>
-                  <MicOff className="h-4 w-4" />
-                  <span>음성 인식 중... (파형 분석)</span>
-                </>
-              ) : (
-                <>
-                  <Mic className="h-4 w-4" />
-                  <span>음성 발화 시작 (“헤이 플레이트”)</span>
-                </>
-              )}
+              <div className="h-9 w-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0">
+                <ShieldAlert className="h-5 w-5 text-blue-400" />
+              </div>
+              <span className="text-sm sm:text-base font-black text-white leading-tight">
+                차량 이상
+              </span>
+            </button>
+
+            {/* 2. 화물 위험 */}
+            <button
+              type="button"
+              id="quick-send-overload-btn"
+              onClick={() =>
+                handleQuickCategorySend(
+                  'OVERLOAD_WARN',
+                  '[화물 낙하 위험] 적재물 낙하 위험이 있습니다. 즉시 점검 부탁드립니다!',
+                  5.0
+                )
+              }
+              className="min-h-[56px] rounded-2xl bg-zinc-900 border border-amber-500/30 hover:border-amber-400 p-2.5 flex items-center gap-2.5 text-left active:scale-95 transition"
+            >
+              <div className="h-9 w-9 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5 text-amber-400" />
+              </div>
+              <span className="text-sm sm:text-base font-black text-amber-300 leading-tight">
+                화물 위험
+              </span>
+            </button>
+
+            {/* 3. 양보 감사 */}
+            <button
+              type="button"
+              id="quick-send-yield-btn"
+              onClick={() =>
+                handleQuickCategorySend(
+                  'YIELD_THANKS',
+                  '[양보운전 감사] 차선 양보와 배려에 감사드립니다!'
+                )
+              }
+              className="min-h-[56px] rounded-2xl bg-zinc-900 border border-white/10 hover:border-blue-500/50 p-2.5 flex items-center gap-2.5 text-left active:scale-95 transition"
+            >
+              <div className="h-9 w-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0">
+                <HeartHandshake className="h-5 w-5 text-blue-400" />
+              </div>
+              <span className="text-sm sm:text-base font-black text-white leading-tight">
+                양보 감사
+              </span>
+            </button>
+
+            {/* 4. 칭찬·문의 */}
+            <button
+              type="button"
+              id="quick-send-tuning-btn"
+              onClick={() =>
+                handleQuickCategorySend(
+                  'TUNING_ASK',
+                  '[차량 칭찬 & 문의] 차량이 멋집니다! 장착 부품 모델명이 궁금합니다.'
+                )
+              }
+              className="min-h-[56px] rounded-2xl bg-zinc-900 border border-white/10 hover:border-blue-500/50 p-2.5 flex items-center gap-2.5 text-left active:scale-95 transition"
+            >
+              <div className="h-9 w-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0">
+                <Sparkles className="h-5 w-5 text-blue-400" />
+              </div>
+              <span className="text-sm sm:text-base font-black text-white leading-tight">
+                칭찬·문의
+              </span>
             </button>
           </div>
+        </div>
+      </footer>
 
-          {/* 음성 테스트 프리셋 버튼들 */}
-          <div className="mt-4">
-            <p className="mb-2 text-xs font-medium text-slate-400">
-              원클릭 음성 발화 시뮬레이션 프리셋 (욕설/거친 표현 순화 테스트 포함):
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {VOICE_PRESET_COMMANDS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  id={preset.id}
-                  onClick={() => handleVoiceTextChange(preset.speech)}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-medium transition border ${
-                    voiceInputText === preset.speech
-                      ? 'bg-sky-500/20 text-sky-300 border-sky-400/60'
-                      : 'bg-slate-950/80 text-slate-300 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <span className="mr-1.5 text-[10px] font-bold text-emerald-400">
-                    [{preset.badge}]
-                  </span>
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 자유 발화 입력창 */}
-          <div className="mt-4">
-            <label
-              htmlFor="driver-voice-transcript-input"
-              className="block text-xs font-medium text-slate-400"
+      {/* ─────────────────────────────────────────────────────────────
+          ⚙️ 데모 및 개발자 시뮬레이션 슬라이드 드로어 (Drawer Modal)
+          모든 기존 시뮬레이터/테스트 기능을 온전히 유지하여 이관
+         ───────────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {isDemoDrawerOpen && (
+          <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 240 }}
+              className="w-full max-w-md h-full bg-zinc-950 border-l border-white/10 p-5 flex flex-col justify-between overflow-y-auto"
             >
-              운전자 실시간 음성 인식 텍스트 (직접 수정하여 AI 필터링 테스트 가능)
-            </label>
-            <input
-              id="driver-voice-transcript-input"
-              type="text"
-              value={voiceInputText}
-              onChange={(e) => handleVoiceTextChange(e.target.value)}
-              placeholder="예: 헤이 플레이트, 앞에 흰색 쏘나타 브레이크등 나갔다고 알려줘"
-              className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-sky-400 focus:outline-none"
-            />
-          </div>
+              <div className="space-y-5">
+                {/* 드로어 헤더 */}
+                <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                  <div className="flex items-center gap-2">
+                    <Settings className="h-5 w-5 text-blue-400" />
+                    <h3 className="font-bold text-white text-base">데모 & 시뮬레이터 도구</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsDemoDrawerOpen(false)}
+                    className="p-1 rounded-lg text-zinc-400 hover:text-white"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
 
-          {/* AI 문맥 정제 및 타겟 매칭 결과 프리뷰 */}
-          <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/90 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-emerald-400" />
-                <span className="text-xs font-bold text-emerald-400">
-                  AI 안전 문맥 정제 결과 (Whisper + GPT Safety Guard)
-                </span>
+                {/* 카메라 하드웨어 소스 선택 */}
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                    카메라 입력 소스
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      id="cam-source-blackbox"
+                      onClick={() => setCameraSource('BLACKBOX_RTSP')}
+                      className={`p-2 rounded-xl text-xs font-semibold flex flex-col items-center gap-1 border transition ${
+                        cameraSource === 'BLACKBOX_RTSP'
+                          ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                          : 'bg-zinc-900 border-white/10 text-zinc-400'
+                      }`}
+                    >
+                      <Wifi className="h-4 w-4" />
+                      <span>블랙박스</span>
+                    </button>
+                    <button
+                      type="button"
+                      id="cam-source-actioncam"
+                      onClick={() => setCameraSource('ACTION_CAM')}
+                      className={`p-2 rounded-xl text-xs font-semibold flex flex-col items-center gap-1 border transition ${
+                        cameraSource === 'ACTION_CAM'
+                          ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                          : 'bg-zinc-900 border-white/10 text-zinc-400'
+                      }`}
+                    >
+                      <Radio className="h-4 w-4" />
+                      <span>액션캠</span>
+                    </button>
+                    <button
+                      type="button"
+                      id="cam-source-webrtc"
+                      onClick={() => setCameraSource('WEBRTC_CAM')}
+                      className={`p-2 rounded-xl text-xs font-semibold flex flex-col items-center gap-1 border transition ${
+                        cameraSource === 'WEBRTC_CAM'
+                          ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                          : 'bg-zinc-900 border-white/10 text-zinc-400'
+                      }`}
+                    >
+                      <Camera className="h-4 w-4" />
+                      <span>내장카메라</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 수신 시뮬레이션 버튼들 */}
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                    실시간 메시지 수신 테스트 (TTS 낭독)
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      id="sim-incoming-brake-btn"
+                      onClick={() => {
+                        triggerSimulatedIncomingAlert('BRAKE_LIGHT');
+                        setIsDemoDrawerOpen(false);
+                      }}
+                      className="p-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs font-bold text-zinc-200 hover:border-blue-400 text-left"
+                    >
+                      🔊 브레이크등 고장 수신
+                    </button>
+                    <button
+                      type="button"
+                      id="sim-incoming-overload-btn"
+                      onClick={() => {
+                        triggerSimulatedIncomingAlert('OVERLOAD_BROADCAST');
+                        setIsDemoDrawerOpen(false);
+                      }}
+                      className="p-2.5 rounded-xl bg-zinc-900 border border-amber-500/30 text-xs font-bold text-amber-300 hover:border-amber-400 text-left"
+                    >
+                      🔊 5km 화물위험 수신
+                    </button>
+                    <button
+                      type="button"
+                      id="sim-incoming-yield-btn"
+                      onClick={() => {
+                        triggerSimulatedIncomingAlert('YIELD_THANKS');
+                        setIsDemoDrawerOpen(false);
+                      }}
+                      className="p-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs font-bold text-emerald-300 hover:border-blue-400 text-left"
+                    >
+                      🔊 양보 감사 수신
+                    </button>
+                    <button
+                      type="button"
+                      id="sim-incoming-tuning-btn"
+                      onClick={() => {
+                        triggerSimulatedIncomingAlert('TUNING_QUESTION');
+                        setIsDemoDrawerOpen(false);
+                      }}
+                      className="p-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs font-bold text-zinc-200 hover:border-blue-400 text-left"
+                    >
+                      🔊 부품 문의 수신
+                    </button>
+                  </div>
+                </div>
+
+                {/* 음성 발화 시뮬레이션 프리셋 */}
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                    음성 발화 프리셋 (AI 필터링 테스트)
+                  </span>
+                  <div className="space-y-1.5">
+                    {VOICE_PRESET_COMMANDS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        id={preset.id}
+                        onClick={() => handleVoiceTextChange(preset.speech)}
+                        className={`w-full p-2.5 rounded-xl border text-left text-xs font-medium transition ${
+                          voiceInputText === preset.speech
+                            ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                            : 'bg-zinc-900 border-white/10 text-zinc-300 hover:border-white/20'
+                        }`}
+                      >
+                        <span className="font-bold text-blue-400 mr-1.5">[{preset.badge}]</span>
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 운전자 음성 텍스트 직접 입력 및 AI 정제 테스트 */}
+                <div className="space-y-2">
+                  <label
+                    htmlFor="driver-voice-transcript-input"
+                    className="text-xs font-bold text-zinc-400 uppercase tracking-wider"
+                  >
+                    음성 텍스트 직접 입력 (AI 순화 테스트)
+                  </label>
+                  <input
+                    id="driver-voice-transcript-input"
+                    type="text"
+                    value={voiceInputText}
+                    onChange={(e) => handleVoiceTextChange(e.target.value)}
+                    placeholder="헤이 플레이트, 발화 내용..."
+                    className="w-full rounded-xl bg-zinc-900 border border-white/10 px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-400"
+                  />
+                </div>
+
+                {/* AI 정제 결과 박스 */}
+                <div className="p-3.5 rounded-2xl bg-zinc-900 border border-white/10 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-blue-400 flex items-center gap-1">
+                      <Sparkles className="h-3.5 w-3.5" /> AI 정제 결과
+                    </span>
+                    <span className="font-mono text-zinc-400">
+                      타겟: {aiAnalysis.matchedVehicle?.license_plate || selectedTargetPlate}
+                    </span>
+                  </div>
+
+                  {aiAnalysis.hadProfanityOrAggression && (
+                    <div className="p-2 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs">
+                      {aiAnalysis.coachingNote}
+                    </div>
+                  )}
+
+                  <p className="text-xs font-medium text-white leading-relaxed">
+                    “{aiAnalysis.sanitizedContent}”
+                  </p>
+
+                  <button
+                    type="button"
+                    id="send-ai-sanitized-voice-btn"
+                    onClick={() => {
+                      handleSendAnalyzedVoiceCommand();
+                      setIsDemoDrawerOpen(false);
+                    }}
+                    className="w-full mt-2 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    <span>정제된 메시지 발송하기</span>
+                  </button>
+                </div>
               </div>
-              <span className="rounded-lg bg-slate-900 px-2.5 py-1 font-mono text-xs font-semibold text-sky-300 border border-slate-800">
-                매칭 타겟: {aiAnalysis.matchedVehicle?.license_plate || selectedTargetPlate} (
-                {aiAnalysis.matchedVehicle?.model || '전방 차량'})
-              </span>
-            </div>
 
-            {aiAnalysis.hadProfanityOrAggression && (
-              <div className="mt-2.5 flex items-center gap-2 rounded-xl bg-amber-500/15 border border-amber-400/40 px-3 py-2 text-xs text-amber-300">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
-                <span>{aiAnalysis.coachingNote}</span>
-              </div>
-            )}
-
-            {aiAnalysis.blockedEntirely ? (
-              <div className="mt-3 rounded-xl bg-rose-500/15 border border-rose-500/40 p-3 text-xs font-semibold text-rose-300">
-                {aiAnalysis.blockReason}
-              </div>
-            ) : (
-              <p className="mt-2.5 text-sm font-medium leading-relaxed text-slate-100">
-                “{aiAnalysis.sanitizedContent}”
-              </p>
-            )}
-
-            <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[11px] text-slate-400">
-                {aiAnalysis.broadcastRadiusKm > 0
-                  ? `반경 ${aiAnalysis.broadcastRadiusKm}km 내 주행 중인 모든 플레이트톡 차량에게 동시 경고 브로드캐스트됩니다.`
-                  : '수신 차량의 HUD 및 TTS 스피커로 즉시 전달됩니다.'}
-              </span>
-
+              {/* 드로어 하단 닫기 버튼 */}
               <button
                 type="button"
-                id="send-ai-sanitized-voice-btn"
-                onClick={handleSendAnalyzedVoiceCommand}
-                className="flex items-center gap-2 rounded-xl bg-emerald-400 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-emerald-300 transition"
+                onClick={() => setIsDemoDrawerOpen(false)}
+                className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-xs border border-white/10 mt-4"
               >
-                <Send className="h-3.5 w-3.5" />
-                <span>정제된 안전 메시지 발송</span>
+                닫기
               </button>
-            </div>
+            </motion.div>
           </div>
-        </div>
-
-        {/* 5. 상황별 원터치 소통 버튼 ([1-1] ~ [1-5]) 및 수신 TTS 시뮬레이터 */}
-        <div className="flex flex-col justify-between gap-4 rounded-3xl border border-slate-800 bg-slate-900/90 p-5 lg:col-span-5">
-          <div>
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-white">
-                상황별 원터치 안전 소통 ({selectedTargetPlate})
-              </h2>
-              <span className="rounded-lg bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 border border-emerald-500/30">
-                {selectedVehicle.color} {selectedVehicle.model}
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-slate-400">
-              주행 중 원터치로 차량 이상 고지, 화물 낙하 경고, 튜닝 문의, 양보 감사를 발송합니다.
-            </p>
-
-            <div className="mt-3.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              <button
-                type="button"
-                id="quick-send-defect-btn"
-                onClick={() =>
-                  handleQuickCategorySend(
-                    'DEFECT_ALERT',
-                    '[차량 이상 알림] 차주님! 우측 브레이크등(또는 주유구 커버) 상태를 정차 시 꼭 점검해 주세요. 안전 운전하세요!'
-                  )
-                }
-                className="flex items-start gap-2.5 rounded-2xl border border-slate-800 bg-slate-950/90 p-3 text-left hover:border-sky-400/60 transition"
-              >
-                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" />
-                <div>
-                  <span className="text-xs font-bold text-white">
-                    [1-1] 차량 이상 공유
-                  </span>
-                  <p className="mt-0.5 text-[11px] text-slate-400">
-                    브레이크등 고장 · 타이어 공기압 · 주유구 열림 알림
-                  </p>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                id="quick-send-overload-btn"
-                onClick={() =>
-                  handleQuickCategorySend(
-                    'OVERLOAD_WARN',
-                    '[화물 낙하 위험 + 5km 브로드캐스트] 적재물 결박이 느슨하여 낙하 위험이 있습니다. 즉시 점검 부탁드립니다!',
-                    5.0
-                  )
-                }
-                className="flex items-start gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-left hover:border-amber-400 transition"
-              >
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
-                <div>
-                  <span className="text-xs font-bold text-amber-300">
-                    [1-2] 화물 과적·낙하 경고
-                  </span>
-                  <p className="mt-0.5 text-[11px] text-amber-200/80">
-                    당사자 경고 + 반경 5km 방어운전 브로드캐스트
-                  </p>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                id="quick-send-tuning-btn"
-                onClick={() =>
-                  handleQuickCategorySend(
-                    'TUNING_ASK',
-                    '[차량 칭찬 & 튜닝 문의] 차량 색상이 정말 멋집니다! 장착하신 휠/루프박스 모델명이 궁금합니다.'
-                  )
-                }
-                className="flex items-start gap-2.5 rounded-2xl border border-slate-800 bg-slate-950/90 p-3 text-left hover:border-emerald-400/60 transition"
-              >
-                <HelpCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
-                <div>
-                  <span className="text-xs font-bold text-white">
-                    [1-3] 차량 칭찬·튜닝 문의
-                  </span>
-                  <p className="mt-0.5 text-[11px] text-slate-400">
-                    드레스업 칭찬 및 장착 휠/루프박스 스펙 질문
-                  </p>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                id="quick-send-yield-btn"
-                onClick={() =>
-                  handleQuickCategorySend(
-                    'YIELD_THANKS',
-                    '[양보운전 감사] 방금 차선 변경 시 배려해주시고 양보해주셔서 진심으로 감사합니다!'
-                  )
-                }
-                className="flex items-start gap-2.5 rounded-2xl border border-slate-800 bg-slate-950/90 p-3 text-left hover:border-emerald-400/60 transition"
-              >
-                <HeartHandshake className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
-                <div>
-                  <span className="text-xs font-bold text-white">
-                    [1-5] 양보운전 감사 인사
-                  </span>
-                  <p className="mt-0.5 text-[11px] text-slate-400">
-                    고마운 차주에게 감사 인사 + 명예점수 부여
-                  </p>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* 실시간 수신 메시지 & TTS 자동 브리핑 테스트 패널 */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/90 p-3.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-sky-300">
-                실시간 메시지 수신 & TTS 음성 브리핑 시뮬레이터
-              </span>
-              <span className="text-[11px] text-slate-400">즉시 음성 재생</span>
-            </div>
-            <div className="mt-2.5 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                id="sim-incoming-brake-btn"
-                onClick={() => triggerSimulatedIncomingAlert('BRAKE_LIGHT')}
-                className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 border border-slate-800 hover:border-sky-400/50 transition"
-              >
-                🔊 “브레이크등 고장” 수신
-              </button>
-              <button
-                type="button"
-                id="sim-incoming-overload-btn"
-                onClick={() =>
-                  triggerSimulatedIncomingAlert('OVERLOAD_BROADCAST')
-                }
-                className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-amber-300 border border-slate-800 hover:border-amber-400/50 transition"
-              >
-                🔊 “반경 5km 화물위험” 수신
-              </button>
-              <button
-                type="button"
-                id="sim-incoming-yield-btn"
-                onClick={() => triggerSimulatedIncomingAlert('YIELD_THANKS')}
-                className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-emerald-300 border border-slate-800 hover:border-emerald-400/50 transition"
-              >
-                🔊 “양보 감사 (+30pt)” 수신
-              </button>
-              <button
-                type="button"
-                id="sim-incoming-tuning-btn"
-                onClick={() => triggerSimulatedIncomingAlert('TUNING_QUESTION')}
-                className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 border border-slate-800 hover:border-sky-400/50 transition"
-              >
-                🔊 “브론즈 휠 문의” 수신
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

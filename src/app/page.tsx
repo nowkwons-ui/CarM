@@ -76,7 +76,7 @@ function PlateTalkMobileAppShell() {
     toastBanner,
   } = usePlateTalk();
 
-  // 모바일 뷰포트 모드: 'PORTRAIT' (스마트폰 세로 앱 430px) vs 'CAR_MOUNT' (차량 거치대 대시보드 와이드 모드)
+  // 모바일 뷰포트 모드: 'PORTRAIT' (스마트폰 세로 앱) vs 'CAR_MOUNT' (차량 대시보드 거치 와이드 모드)
   const [viewportMode, setViewportMode] = useState<'PORTRAIT' | 'CAR_MOUNT'>(
     'PORTRAIT'
   );
@@ -89,142 +89,136 @@ function PlateTalkMobileAppShell() {
   ).length;
   const totalBadge = unreadActiveCount + unredeemedGiftsCount;
 
+  const isHudTab = activeTab === 'HUD';
+
   return (
-    <div className="min-h-screen bg-[#020409] text-slate-100 flex flex-col items-center justify-start sm:py-4 sm:px-3">
-      {/* 상단 디바이스 뷰포트 모드 스위처 (모바일 세로 앱 ↔ 차량 대시보드 가로 거치 모드) */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-800/90 bg-slate-900/90 px-3.5 py-2 text-xs backdrop-blur-md w-full max-w-[440px]">
+    <div className="h-dvh w-full bg-black text-zinc-100 flex flex-col items-center justify-start overflow-hidden sm:p-2">
+      {/* 데스크톱/테스트 환경용 뷰포트 전환 툴바 (초소형) */}
+      <div className="hidden sm:flex items-center justify-between gap-2 px-3 py-1 text-[11px] bg-zinc-900/80 border border-white/10 rounded-xl mb-1.5 w-full max-w-[440px]">
         <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="font-bold text-slate-200">PlateTalk Mobile PWA</span>
+          <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+          <span className="font-bold text-zinc-300">PlateTalk CarPlay HUD</span>
         </div>
-        <div className="flex items-center gap-1 rounded-xl bg-slate-950 p-1 border border-slate-800">
+        <div className="flex items-center gap-1">
           <button
             type="button"
             id="switch-portrait-mobile-btn"
             onClick={() => setViewportMode('PORTRAIT')}
-            className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+            className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
               viewportMode === 'PORTRAIT'
-                ? 'bg-sky-400 text-slate-950'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-blue-600 text-white'
+                : 'text-zinc-400 hover:text-white'
             }`}
           >
-            <Smartphone className="h-3 w-3" />
-            <span>모바일 세로형 (430px)</span>
+            <Smartphone className="inline h-3 w-3 mr-1" />
+            세로
           </button>
           <button
             type="button"
             id="switch-carmount-wide-btn"
             onClick={() => setViewportMode('CAR_MOUNT')}
-            className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+            className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
               viewportMode === 'CAR_MOUNT'
-                ? 'bg-emerald-400 text-slate-950'
-                : 'text-slate-400 hover:text-white'
+                ? 'bg-blue-600 text-white'
+                : 'text-zinc-400 hover:text-white'
             }`}
           >
-            <Monitor className="h-3 w-3" />
-            <span>차량 거치 와이드 HUD</span>
+            <Monitor className="inline h-3 w-3 mr-1" />
+            와이드
           </button>
         </div>
       </div>
 
-      {/* 스마트폰 / 차량 거치대 메인 앱 컨테이너 */}
+      {/* 스마트폰 / 차량 거치대 메인 앱 컨테이너 (No-Scroll 100dvh) */}
       <div
-        className={`relative flex flex-col w-full overflow-hidden bg-[#050811] sm:rounded-[38px] sm:border-[3px] sm:border-slate-800/90 shadow-[0_24px_80px_rgba(0,0,0,0.85)] transition-all duration-300 ${
+        className={`relative flex flex-col w-full h-full max-h-full overflow-hidden bg-zinc-950 sm:rounded-[32px] sm:border sm:border-white/10 shadow-2xl transition-all duration-200 ${
           viewportMode === 'PORTRAIT'
-            ? 'max-w-[440px] min-h-[860px]'
-            : 'max-w-5xl min-h-[760px]'
+            ? 'max-w-[440px]'
+            : 'max-w-5xl'
         }`}
       >
-        {/* 1. 모바일 네이티브 상태 표시줄 (iOS/Android Status Bar) */}
-        <div className="flex items-center justify-between bg-[#050811] px-6 pt-3 pb-1.5 text-[11px] font-semibold text-slate-300 select-none">
-          <div className="flex items-center gap-2">
+        {/* 네이티브 상태 표시줄 (HUD 탭에서는 미니멀 처리) */}
+        {!isHudTab && (
+          <div className="flex items-center justify-between bg-zinc-950 px-5 pt-2.5 pb-1 text-[11px] font-semibold text-zinc-400 select-none">
             <span className="font-mono font-bold text-white">09:41</span>
-            <span className="rounded bg-sky-500/20 px-1.5 py-0.2 text-[9px] font-bold text-sky-300 border border-sky-400/30">
-              RTSP 연결됨
-            </span>
+            <div className="flex items-center gap-2">
+              <Signal className="h-3 w-3 text-zinc-300" />
+              <span className="text-[10px] font-mono">5G</span>
+              <Wifi className="h-3 w-3 text-blue-400" />
+              <BatteryCharging className="h-3.5 w-3.5 text-emerald-400" />
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-slate-300">
-            <Signal className="h-3 w-3 text-emerald-400" />
-            <span className="text-[10px] font-mono">5G</span>
-            <Wifi className="h-3 w-3 text-sky-400" />
-            <BatteryCharging className="h-3.5 w-3.5 text-emerald-400" />
-          </div>
-        </div>
+        )}
 
-        {/* 2. 모바일 앱 상단 헤더 */}
-        <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-[#050811]/95 px-4 py-2.5 backdrop-blur-xl">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 to-emerald-400 text-slate-950 font-black text-sm shadow-md">
-                PT
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <h1 className="text-sm font-black tracking-tight text-white">
-                    PlateTalk <span className="text-sky-400">모바일</span>
-                  </h1>
-                  <span className="rounded-md bg-slate-900 px-1.5 py-0.5 font-mono text-[10px] font-bold text-emerald-300 border border-emerald-500/30">
-                    {activeVehicle.license_plate}
-                  </span>
+        {/* 일반 탭(알림, 커뮤니티, 명예, 개러지)에서만 노출되는 헤더 (HUD 탭에서는 HUD 자체 슬림 헤더가 전담) */}
+        {!isHudTab && (
+          <header className="shrink-0 border-b border-white/10 bg-zinc-950/95 px-4 py-2.5 backdrop-blur-xl">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white font-black text-xs shadow-md">
+                  PT
                 </div>
-                <p className="text-[10px] text-slate-400">
-                  핸즈프리 음성 소통 & 번호판 명예 커뮤니티
-                </p>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <h1 className="text-sm font-black text-white">PlateTalk</h1>
+                    <span className="rounded-md bg-zinc-900 px-1.5 py-0.5 font-mono text-[10px] font-bold text-blue-400 border border-white/10">
+                      {activeVehicle.license_plate}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 우측 인증배지 & 명예점수 알약 */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  id="header-garage-status-btn"
+                  onClick={() => setActiveTab('GARAGE')}
+                  className={`flex items-center gap-1 rounded-xl border px-2.5 py-1 text-[10px] font-extrabold transition ${
+                    activeVehicle.verification_status === 'VERIFIED'
+                      ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-300'
+                      : activeVehicle.verification_status === 'PENDING'
+                      ? 'border-amber-400/50 bg-amber-500/15 text-amber-300'
+                      : 'border-rose-400/50 bg-rose-500/15 text-rose-300'
+                  }`}
+                >
+                  <ShieldCheck className="h-3 w-3" />
+                  <span>{activeVehicle.verification_status}</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="header-honor-points-btn"
+                  onClick={() => setActiveTab('HONOR')}
+                  className="flex items-center gap-1 rounded-xl border border-white/10 bg-zinc-900 px-2.5 py-1 text-[10px] font-extrabold text-blue-400"
+                >
+                  <Award className="h-3 w-3 text-amber-400" />
+                  <span className="font-mono">{user.honor_points.toLocaleString()}P</span>
+                </button>
               </div>
             </div>
+          </header>
+        )}
 
-            {/* 우측 인증배지 & 명예점수 알약 */}
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                id="header-garage-status-btn"
-                onClick={() => setActiveTab('GARAGE')}
-                className={`flex items-center gap-1 rounded-xl border px-2.5 py-1 text-[10px] font-extrabold transition ${
-                  activeVehicle.verification_status === 'VERIFIED'
-                    ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-300'
-                    : activeVehicle.verification_status === 'PENDING'
-                    ? 'border-amber-400/50 bg-amber-500/15 text-amber-300'
-                    : 'border-rose-400/50 bg-rose-500/15 text-rose-300'
-                }`}
-              >
-                <ShieldCheck className="h-3 w-3" />
-                <span>{activeVehicle.verification_status}</span>
-              </button>
-
-              <button
-                type="button"
-                id="header-honor-points-btn"
-                onClick={() => setActiveTab('HONOR')}
-                className="flex items-center gap-1 rounded-xl border border-sky-400/40 bg-sky-500/15 px-2.5 py-1 text-[10px] font-extrabold text-sky-300"
-              >
-                <Award className="h-3 w-3 text-emerald-400" />
-                <span className="font-mono">
-                  {user.honor_points.toLocaleString()}P
-                </span>
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* 실시간 토스트 알림 배너 */}
+        {/* 실시간 글로벌 토스트 알림 배너 */}
         {toastBanner && (
-          <div className="px-3 pt-2.5">
+          <div className="absolute top-2 left-3 right-3 z-50 pointer-events-none">
             <div
-              className={`flex items-center justify-between gap-2 rounded-2xl border px-3.5 py-2.5 text-xs font-bold shadow-xl ${
+              className={`flex items-center justify-between gap-2 rounded-2xl border px-3.5 py-2.5 text-xs font-bold shadow-2xl backdrop-blur-md pointer-events-auto ${
                 toastBanner.tone === 'emerald'
-                  ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-200'
+                  ? 'border-emerald-500/40 bg-zinc-950/95 text-emerald-300'
                   : toastBanner.tone === 'amber'
-                  ? 'border-amber-400/60 bg-amber-500/15 text-amber-200'
+                  ? 'border-amber-500/40 bg-zinc-950/95 text-amber-300'
                   : toastBanner.tone === 'rose'
-                  ? 'border-rose-400/60 bg-rose-500/15 text-rose-200'
-                  : 'border-sky-400/60 bg-sky-500/15 text-sky-200'
+                  ? 'border-rose-500/40 bg-zinc-950/95 text-rose-300'
+                  : 'border-blue-500/40 bg-zinc-950/95 text-blue-300'
               }`}
             >
               <div className="flex items-center gap-2">
                 {toastBanner.tone === 'rose' ? (
                   <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
                 ) : (
-                  <Sparkles className="h-4 w-4 shrink-0 text-emerald-400" />
+                  <Sparkles className="h-4 w-4 shrink-0 text-blue-400" />
                 )}
                 <span className="leading-snug">{toastBanner.message}</span>
               </div>
@@ -232,8 +226,12 @@ function PlateTalkMobileAppShell() {
           </div>
         )}
 
-        {/* 3. 모바일 스크롤 컨텐츠 영역 */}
-        <main className="flex-1 overflow-y-auto px-3.5 pt-3.5 pb-28">
+        {/* 메인 컨텐츠 영역 (HUD 탭에서는 스크롤 없이 100% 핏, 타 탭에서는 수직 스크롤) */}
+        <main
+          className={`flex-1 min-h-0 flex flex-col ${
+            isHudTab ? 'overflow-hidden p-0' : 'overflow-y-auto px-4 py-4 pb-20'
+          }`}
+        >
           {activeTab === 'HUD' && <DrivingHudTab />}
           {activeTab === 'ALERTS_GIFTS' && <AlertsAndGiftsTab />}
           {activeTab === 'COMMUNITY' && <CommunityShowroomTab />}
@@ -244,12 +242,12 @@ function PlateTalkMobileAppShell() {
         {/* 원클릭 기프트 답례 모달 */}
         <QuickGiftModal />
 
-        {/* 4. 모바일 앱 하단 고정 5탭 네비게이션 바 (Bottom App Bar) */}
+        {/* ④ 하단 네비게이션 바 (높이 64px, h-16, 미니멀 정리) */}
         <nav
-          aria-label="모바일 하단 탭 네비게이션"
-          className="sticky bottom-0 inset-x-0 z-40 border-t border-slate-800/90 bg-[#050811]/95 px-2 pt-2 pb-3 backdrop-blur-xl"
+          aria-label="하단 네비게이션"
+          className="h-16 shrink-0 border-t border-white/10 bg-zinc-950/95 px-2 flex items-center justify-around backdrop-blur-xl z-40"
         >
-          <div className="grid grid-cols-5 gap-1">
+          <div className="grid grid-cols-5 w-full gap-1">
             {NAV_TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -259,21 +257,23 @@ function PlateTalkMobileAppShell() {
                   type="button"
                   id={`mobile-tab-${tab.id}`}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`relative flex flex-col items-center justify-center rounded-2xl py-2 text-[11px] font-extrabold transition ${
+                  className={`relative flex flex-col items-center justify-center py-1 transition ${
                     isActive
-                      ? 'bg-gradient-to-b from-sky-500/25 to-emerald-500/20 text-sky-300 border border-sky-400/50 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'text-blue-500 font-extrabold'
+                      : 'text-zinc-500 hover:text-zinc-300 font-medium'
                   }`}
                 >
                   <Icon
-                    className={`h-4 w-4 ${
-                      isActive ? 'text-emerald-400' : 'text-slate-400'
+                    className={`h-5 w-5 transition ${
+                      isActive ? 'text-blue-500' : 'text-zinc-500'
                     }`}
                   />
-                  <span className="mt-1 tracking-tight">{tab.shortLabel}</span>
+                  <span className="mt-1 text-[12px] sm:text-[13px] tracking-tight">
+                    {tab.shortLabel}
+                  </span>
 
                   {tab.id === 'ALERTS_GIFTS' && totalBadge > 0 && (
-                    <span className="absolute top-1 right-2.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-400 px-1 text-[9px] font-black text-slate-950">
+                    <span className="absolute top-0 right-3 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-black text-white shadow-md">
                       {totalBadge}
                     </span>
                   )}
@@ -281,8 +281,6 @@ function PlateTalkMobileAppShell() {
               );
             })}
           </div>
-          {/* 모바일 홈 인디케이터 바 */}
-          <div className="mx-auto mt-2.5 h-1 w-28 rounded-full bg-slate-700/80" />
         </nav>
       </div>
     </div>
