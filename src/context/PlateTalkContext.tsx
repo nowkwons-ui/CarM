@@ -4,6 +4,7 @@ import React, {
   createContext,
   useContext,
   useState,
+  useEffect,
   useCallback,
   useRef,
   useMemo,
@@ -51,6 +52,11 @@ export interface FeatureStatusItem {
 }
 
 interface PlateTalkContextValue {
+  // 테마 (다크 모드 / 연한 노란색 밝은 모드)
+  theme: 'dark' | 'light';
+  setTheme: (theme: 'dark' | 'light') => void;
+  toggleTheme: () => void;
+
   // 모드 및 탭
   activeTab: ActiveTabId;
   setActiveTab: (tab: ActiveTabId) => void;
@@ -634,8 +640,50 @@ const PlateTalkContext = createContext<PlateTalkContextValue | undefined>(undefi
 const SEND_COOLDOWN_MS = 60000; // 60초 동일 대상 발송 쿨다운
 
 export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setThemeState] = useState<'dark' | 'light'>(() => {
+    if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem('platetalk_theme');
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        return savedTheme;
+      }
+    }
+    return 'dark';
+  });
   const [activeTab, setActiveTab] = useState<ActiveTabId>('HUD');
   const [isDemoMode, setIsDemoMode] = useState<boolean>(true);
+
+  // 로컬 스토리지 테마 동기화 및 html data-theme 적용
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', theme);
+      if (theme === 'light') {
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+      } else {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      }
+    }
+  }, [theme]);
+
+  const setTheme = useCallback((newTheme: 'dark' | 'light') => {
+    setThemeState(newTheme);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('platetalk_theme', newTheme);
+      document.documentElement.setAttribute('data-theme', newTheme);
+      if (newTheme === 'light') {
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+      } else {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      }
+    }
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+  }, [theme, setTheme]);
   const [user, setUser] = useState<UserProfile>(INITIAL_USER);
   const [vehicles, setVehicles] = useState<Vehicle[]>(INITIAL_VEHICLES);
   const [activeVehicleId, setActiveVehicleId] = useState<string>('veh-genesis-g80');
@@ -1367,6 +1415,9 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
   return (
     <PlateTalkContext.Provider
       value={{
+        theme,
+        setTheme,
+        toggleTheme,
         activeTab,
         setActiveTab,
         isDemoMode,

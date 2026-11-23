@@ -20,6 +20,8 @@ import {
   Camera,
   Wifi,
   Radio,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { usePlateTalk } from '@/context/PlateTalkContext';
 import {
@@ -64,6 +66,8 @@ const VOICE_PRESET_COMMANDS = [
 
 export default function DrivingHudTab() {
   const {
+    theme,
+    toggleTheme,
     activeVehicle,
     scannedVehicles,
     selectedTargetPlate,
@@ -79,6 +83,8 @@ export default function DrivingHudTab() {
     openQuickGiftModal,
     showToast,
   } = usePlateTalk();
+
+  const isLight = theme === 'light';
 
   // 카메라 스트림 상태
   const [cameraSource, setCameraSource] = useState<
@@ -264,30 +270,55 @@ export default function DrivingHudTab() {
   };
 
   return (
-    <div className="relative flex flex-col h-full w-full overflow-hidden bg-zinc-950 select-none">
+    <div
+      className={`relative flex flex-col h-full w-full overflow-hidden select-none transition-colors duration-200 ${
+        isLight ? 'bg-[#fbf8ee] text-stone-900' : 'bg-zinc-950 text-white'
+      }`}
+    >
       {/* ─────────────────────────────────────────────────────────────
           ① 상단 헤더 (초슬림, 높이 56px 이하)
           - 좌측: 내 차 번호판 배지 (12라 3466)
-          - 우측: [🔴 주행 종료] + [⚙️ 데모]
+          - 우측: [🔴 주행 종료] + [☀️/🌙 테마 전환] + [⚙️ 데모]
          ───────────────────────────────────────────────────────────── */}
-      <header className="h-14 shrink-0 px-4 flex items-center justify-between border-b border-white/10 bg-zinc-950/90 backdrop-blur-md z-20">
+      <header
+        className={`h-14 shrink-0 px-4 flex items-center justify-between border-b backdrop-blur-md z-20 transition-colors ${
+          isLight
+            ? 'bg-[#fdfaf1]/95 border-amber-900/10 text-stone-900'
+            : 'bg-zinc-950/90 border-white/10 text-white'
+        }`}
+      >
         {/* 좌측 내 차 번호판 */}
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/10">
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="font-mono text-base font-black tracking-wider text-white">
+        <div
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-colors ${
+            isLight
+              ? 'bg-white border-amber-300/60 shadow-sm text-stone-900'
+              : 'bg-zinc-900 border-white/10 text-white'
+          }`}
+        >
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span
+            className={`font-mono text-base font-black tracking-wider ${
+              isLight ? 'text-stone-900' : 'text-white'
+            }`}
+          >
             {activeVehicle.license_plate}
           </span>
         </div>
 
-        {/* 우측 주행 제어 및 데모 드로어 버튼 */}
-        <div className="flex items-center gap-2">
+        {/* 우측 주행 제어, 테마 스위처 및 데모 드로어 버튼 */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* 주행 모드 토글 */}
           <button
             type="button"
             id="toggle-driving-mode-btn"
             onClick={toggleDrivingMode}
             className={`min-h-[40px] px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition ${
               isDrivingMode
-                ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400 hover:bg-rose-500/25'
+                ? isLight
+                  ? 'bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100'
+                  : 'bg-rose-500/15 border border-rose-500/30 text-rose-400 hover:bg-rose-500/25'
+                : isLight
+                ? 'bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100'
                 : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
             }`}
           >
@@ -295,14 +326,45 @@ export default function DrivingHudTab() {
             <span>{isDrivingMode ? '🔴 주행 종료' : '🟢 주행 시작'}</span>
           </button>
 
+          {/* 테마 스위처 버튼 (다크모드 ↔ 연한 노란색 밝은모드) */}
+          <button
+            type="button"
+            id="toggle-theme-hud-btn"
+            onClick={toggleTheme}
+            className={`min-h-[40px] px-2.5 sm:px-3 rounded-xl border flex items-center gap-1.5 text-xs font-bold transition ${
+              isLight
+                ? 'bg-amber-100/70 border-amber-300 text-amber-900 hover:bg-amber-200/70 shadow-sm'
+                : 'bg-zinc-900 border-white/10 text-amber-300 hover:bg-zinc-800'
+            }`}
+            aria-label="테마 전환"
+            title={isLight ? '다크 모드로 전환' : '연한 노란색 밝은 모드로 전환'}
+          >
+            {isLight ? (
+              <>
+                <Sun className="h-4 w-4 text-amber-600 fill-amber-500" />
+                <span className="hidden sm:inline">밝은모드</span>
+              </>
+            ) : (
+              <>
+                <Moon className="h-4 w-4 text-amber-300 fill-amber-300" />
+                <span className="hidden sm:inline">다크모드</span>
+              </>
+            )}
+          </button>
+
+          {/* 데모/시뮬레이션 열기 버튼 */}
           <button
             type="button"
             id="open-demo-drawer-btn"
             onClick={() => setIsDemoDrawerOpen(true)}
-            className="min-h-[40px] px-3 rounded-xl bg-zinc-900 border border-white/10 text-zinc-300 hover:text-white flex items-center gap-1.5 text-xs font-semibold transition"
+            className={`min-h-[40px] px-3 rounded-xl border flex items-center gap-1.5 text-xs font-semibold transition ${
+              isLight
+                ? 'bg-white border-amber-900/10 text-stone-700 hover:text-stone-950 shadow-sm'
+                : 'bg-zinc-900 border-white/10 text-zinc-300 hover:text-white'
+            }`}
             aria-label="데모 및 시뮬레이션 설정 열기"
           >
-            <Settings className="h-4 w-4 text-zinc-400" />
+            <Settings className={`h-4 w-4 ${isLight ? 'text-stone-500' : 'text-zinc-400'}`} />
             <span className="hidden sm:inline">데모</span>
           </button>
         </div>
@@ -397,21 +459,25 @@ export default function DrivingHudTab() {
               initial={{ opacity: 0, y: 30, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.96 }}
-              className="relative z-30 mx-3 mb-2 rounded-2xl border border-white/15 bg-black/85 backdrop-blur-xl p-4 shadow-2xl"
+              className={`relative z-30 mx-3 mb-2 rounded-2xl p-4 shadow-2xl backdrop-blur-xl border transition-colors ${
+                isLight
+                  ? 'bg-white/95 border-amber-900/15 text-stone-900 shadow-stone-400/20'
+                  : 'bg-black/85 border-white/15 text-white'
+              }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-xl sm:text-2xl font-black tracking-wider text-blue-400">
+                  <span className="font-mono text-xl sm:text-2xl font-black tracking-wider text-blue-600">
                     {activeHudIncomingMessage.sender_plate_snapshot}
                   </span>
-                  <span className="text-xs text-zinc-400 font-medium">
+                  <span className={`text-xs font-medium ${isLight ? 'text-stone-600' : 'text-zinc-400'}`}>
                     {activeHudIncomingMessage.sender_vehicle_summary}
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={dismissHudOverlayCard}
-                  className="p-1 rounded-lg text-zinc-400 hover:text-white"
+                  className={`p-1 rounded-lg ${isLight ? 'text-stone-400 hover:text-stone-800' : 'text-zinc-400 hover:text-white'}`}
                   aria-label="알림 닫기"
                 >
                   <X className="h-5 w-5" />
@@ -419,7 +485,11 @@ export default function DrivingHudTab() {
               </div>
 
               {/* 핵심 한 줄 메시지 (text-xl font-bold, 최대 2줄) */}
-              <p className="mt-2 text-lg sm:text-xl font-bold leading-snug text-white line-clamp-2">
+              <p
+                className={`mt-2 text-lg sm:text-xl font-bold leading-snug line-clamp-2 ${
+                  isLight ? 'text-stone-950' : 'text-white'
+                }`}
+              >
                 “{activeHudIncomingMessage.content}”
               </p>
 
@@ -434,7 +504,9 @@ export default function DrivingHudTab() {
                   }
                   className={`min-h-[56px] rounded-xl px-4 flex items-center justify-center gap-2 font-bold text-base transition ${
                     activeHudIncomingMessage.helpful_acknowledged
-                      ? 'bg-zinc-800 text-emerald-400 cursor-default'
+                      ? isLight
+                        ? 'bg-stone-100 text-emerald-700 cursor-default'
+                        : 'bg-zinc-800 text-emerald-400 cursor-default'
                       : 'bg-emerald-500 text-black hover:bg-emerald-400 active:scale-95'
                   }`}
                 >
@@ -484,6 +556,8 @@ export default function DrivingHudTab() {
                       ? isCargo
                         ? 'bg-amber-500 text-black border-2 border-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.5)]'
                         : 'bg-blue-600 text-white border-2 border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.6)]'
+                      : isLight
+                      ? 'bg-[#fdfaf1]/95 backdrop-blur-md border border-amber-900/15 text-stone-800 shadow-sm hover:border-amber-400'
                       : 'bg-zinc-950/85 backdrop-blur-md border border-white/10 text-zinc-300 hover:border-white/30'
                   }`}
                 >
@@ -492,9 +566,9 @@ export default function DrivingHudTab() {
                       {v.license_plate}
                     </span>
                     {isCargo ? (
-                      <AlertTriangle className={`h-3.5 w-3.5 shrink-0 ${isSelected ? 'text-black' : 'text-amber-400'}`} />
+                      <AlertTriangle className={`h-3.5 w-3.5 shrink-0 ${isSelected ? 'text-black' : 'text-amber-500'}`} />
                     ) : (
-                      <Car className={`h-3.5 w-3.5 shrink-0 ${isSelected ? 'text-white' : 'text-zinc-400'}`} />
+                      <Car className={`h-3.5 w-3.5 shrink-0 ${isSelected ? 'text-white' : isLight ? 'text-stone-500' : 'text-zinc-400'}`} />
                     )}
                   </div>
                   <span
@@ -503,6 +577,8 @@ export default function DrivingHudTab() {
                         ? isCargo
                           ? 'text-black/80'
                           : 'text-white/80'
+                        : isLight
+                        ? 'text-stone-600'
                         : 'text-zinc-400'
                     }`}
                   >
@@ -519,7 +595,13 @@ export default function DrivingHudTab() {
           ③ 하단 컨트롤 독 (화면의 약 30% 차지, 직관적 원터치)
           대형 마이크 1개 + 4개 원터치 퀵 버튼 (2x2 그리드)
          ───────────────────────────────────────────────────────────── */}
-      <footer className="shrink-0 p-3 bg-zinc-950 border-t border-white/10 z-20">
+      <footer
+        className={`shrink-0 p-3 border-t z-20 transition-colors ${
+          isLight
+            ? 'bg-[#f5efe0] border-amber-900/10'
+            : 'bg-zinc-950 border-white/10'
+        }`}
+      >
         <div className="flex items-stretch gap-3">
           {/* 중앙/좌측 대형 마이크 버튼 (헤이 플레이트) */}
           <button
@@ -529,6 +611,8 @@ export default function DrivingHudTab() {
             className={`w-28 sm:w-32 shrink-0 rounded-2xl flex flex-col items-center justify-center p-2.5 transition active:scale-95 ${
               isListeningStt
                 ? 'bg-blue-600 text-white shadow-[0_0_35px_rgba(59,130,246,0.85)] border-2 border-white animate-pulse'
+                : isLight
+                ? 'bg-white border-2 border-blue-500/40 text-blue-600 shadow-md hover:border-blue-500'
                 : 'bg-zinc-900 border border-blue-500/40 text-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.2)] hover:border-blue-400'
             }`}
           >
@@ -544,9 +628,15 @@ export default function DrivingHudTab() {
               </>
             ) : (
               <>
-                <Mic className="h-8 w-8 text-blue-400 mb-1" />
-                <span className="text-xs font-black tracking-tight text-white">헤이 플레이트</span>
-                <span className="text-[10px] font-semibold text-blue-400 mt-0.5">음성 명령</span>
+                <Mic className="h-8 w-8 text-blue-600 mb-1" />
+                <span
+                  className={`text-xs font-black tracking-tight ${
+                    isLight ? 'text-stone-900' : 'text-white'
+                  }`}
+                >
+                  헤이 플레이트
+                </span>
+                <span className="text-[10px] font-bold text-blue-600 mt-0.5">음성 명령</span>
               </>
             )}
           </button>
@@ -563,12 +653,16 @@ export default function DrivingHudTab() {
                   '[차량 이상 알림] 브레이크등 또는 주유구 커버 상태를 확인해 주세요!'
                 )
               }
-              className="min-h-[56px] rounded-2xl bg-zinc-900 border border-white/10 hover:border-blue-500/50 p-2.5 flex items-center gap-2.5 text-left active:scale-95 transition"
+              className={`min-h-[56px] rounded-2xl p-2.5 flex items-center gap-2.5 text-left active:scale-95 transition ${
+                isLight
+                  ? 'bg-white border border-amber-900/10 hover:border-blue-500/50 text-stone-900 shadow-sm'
+                  : 'bg-zinc-900 border border-white/10 hover:border-blue-500/50 text-white'
+              }`}
             >
               <div className="h-9 w-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0">
-                <ShieldAlert className="h-5 w-5 text-blue-400" />
+                <ShieldAlert className="h-5 w-5 text-blue-600" />
               </div>
-              <span className="text-sm sm:text-base font-black text-white leading-tight">
+              <span className="text-sm sm:text-base font-black leading-tight">
                 차량 이상
               </span>
             </button>
@@ -584,12 +678,16 @@ export default function DrivingHudTab() {
                   5.0
                 )
               }
-              className="min-h-[56px] rounded-2xl bg-zinc-900 border border-amber-500/30 hover:border-amber-400 p-2.5 flex items-center gap-2.5 text-left active:scale-95 transition"
+              className={`min-h-[56px] rounded-2xl p-2.5 flex items-center gap-2.5 text-left active:scale-95 transition ${
+                isLight
+                  ? 'bg-amber-50/90 border border-amber-300/80 hover:border-amber-500 text-amber-950 shadow-sm'
+                  : 'bg-zinc-900 border border-amber-500/30 hover:border-amber-400 text-amber-300'
+              }`}
             >
               <div className="h-9 w-9 rounded-xl bg-amber-500/15 border border-amber-400/40 flex items-center justify-center shrink-0">
-                <AlertTriangle className="h-5 w-5 text-amber-400" />
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
               </div>
-              <span className="text-sm sm:text-base font-black text-amber-300 leading-tight">
+              <span className="text-sm sm:text-base font-black leading-tight">
                 화물 위험
               </span>
             </button>
@@ -604,12 +702,16 @@ export default function DrivingHudTab() {
                   '[양보운전 감사] 차선 양보와 배려에 감사드립니다!'
                 )
               }
-              className="min-h-[56px] rounded-2xl bg-zinc-900 border border-white/10 hover:border-blue-500/50 p-2.5 flex items-center gap-2.5 text-left active:scale-95 transition"
+              className={`min-h-[56px] rounded-2xl p-2.5 flex items-center gap-2.5 text-left active:scale-95 transition ${
+                isLight
+                  ? 'bg-white border border-amber-900/10 hover:border-blue-500/50 text-stone-900 shadow-sm'
+                  : 'bg-zinc-900 border border-white/10 hover:border-blue-500/50 text-white'
+              }`}
             >
               <div className="h-9 w-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0">
-                <HeartHandshake className="h-5 w-5 text-blue-400" />
+                <HeartHandshake className="h-5 w-5 text-blue-600" />
               </div>
-              <span className="text-sm sm:text-base font-black text-white leading-tight">
+              <span className="text-sm sm:text-base font-black leading-tight">
                 양보 감사
               </span>
             </button>
@@ -624,12 +726,16 @@ export default function DrivingHudTab() {
                   '[차량 칭찬 & 문의] 차량이 멋집니다! 장착 부품 모델명이 궁금합니다.'
                 )
               }
-              className="min-h-[56px] rounded-2xl bg-zinc-900 border border-white/10 hover:border-blue-500/50 p-2.5 flex items-center gap-2.5 text-left active:scale-95 transition"
+              className={`min-h-[56px] rounded-2xl p-2.5 flex items-center gap-2.5 text-left active:scale-95 transition ${
+                isLight
+                  ? 'bg-white border border-amber-900/10 hover:border-blue-500/50 text-stone-900 shadow-sm'
+                  : 'bg-zinc-900 border border-white/10 hover:border-blue-500/50 text-white'
+              }`}
             >
               <div className="h-9 w-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0">
-                <Sparkles className="h-5 w-5 text-blue-400" />
+                <Sparkles className="h-5 w-5 text-blue-600" />
               </div>
-              <span className="text-sm sm:text-base font-black text-white leading-tight">
+              <span className="text-sm sm:text-base font-black leading-tight">
                 칭찬·문의
               </span>
             </button>
@@ -649,27 +755,69 @@ export default function DrivingHudTab() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 240 }}
-              className="w-full max-w-md h-full bg-zinc-950 border-l border-white/10 p-5 flex flex-col justify-between overflow-y-auto"
+              className={`w-full max-w-md h-full p-5 flex flex-col justify-between overflow-y-auto border-l transition-colors ${
+                isLight
+                  ? 'bg-[#fdfaf1] border-amber-900/15 text-stone-900'
+                  : 'bg-zinc-950 border-white/10 text-white'
+              }`}
             >
               <div className="space-y-5">
                 {/* 드로어 헤더 */}
-                <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                <div
+                  className={`flex items-center justify-between pb-3 border-b ${
+                    isLight ? 'border-amber-900/10' : 'border-white/10'
+                  }`}
+                >
                   <div className="flex items-center gap-2">
-                    <Settings className="h-5 w-5 text-blue-400" />
-                    <h3 className="font-bold text-white text-base">데모 & 시뮬레이터 도구</h3>
+                    <Settings className="h-5 w-5 text-blue-600" />
+                    <h3 className="font-bold text-base">데모 & 시뮬레이터 도구</h3>
                   </div>
                   <button
                     type="button"
                     onClick={() => setIsDemoDrawerOpen(false)}
-                    className="p-1 rounded-lg text-zinc-400 hover:text-white"
+                    className={`p-1 rounded-lg ${isLight ? 'text-stone-400 hover:text-stone-900' : 'text-zinc-400 hover:text-white'}`}
                   >
                     <X className="h-5 w-5" />
                   </button>
                 </div>
 
+                {/* 테마 스위처 설정 타일 */}
+                <div
+                  className={`p-3 rounded-2xl border flex items-center justify-between ${
+                    isLight
+                      ? 'bg-amber-100/50 border-amber-300 text-stone-900'
+                      : 'bg-zinc-900 border-white/10 text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    {isLight ? (
+                      <Sun className="h-5 w-5 text-amber-600 fill-amber-500" />
+                    ) : (
+                      <Moon className="h-5 w-5 text-amber-300 fill-amber-300" />
+                    )}
+                    <div>
+                      <span className="text-xs font-bold block">
+                        현재 테마: {isLight ? '연한 노란색 밝은 모드' : '다크 모드'}
+                      </span>
+                      <span className="text-[10px] text-stone-500 dark:text-zinc-400">
+                        {isLight
+                          ? '부드럽고 편안한 웜 옐로우 인테리어'
+                          : '고대비 주행 야간 HUD 테마'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleTheme}
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition"
+                  >
+                    {isLight ? '다크로 변경' : '밝은모드로 변경'}
+                  </button>
+                </div>
+
                 {/* 카메라 하드웨어 소스 선택 */}
                 <div className="space-y-2">
-                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  <span className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-stone-500' : 'text-zinc-400'}`}>
                     카메라 입력 소스
                   </span>
                   <div className="grid grid-cols-3 gap-2">
@@ -679,7 +827,9 @@ export default function DrivingHudTab() {
                       onClick={() => setCameraSource('BLACKBOX_RTSP')}
                       className={`p-2 rounded-xl text-xs font-semibold flex flex-col items-center gap-1 border transition ${
                         cameraSource === 'BLACKBOX_RTSP'
-                          ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                          ? 'bg-blue-600/20 border-blue-500 text-blue-600 font-bold'
+                          : isLight
+                          ? 'bg-white border-amber-900/10 text-stone-600'
                           : 'bg-zinc-900 border-white/10 text-zinc-400'
                       }`}
                     >
@@ -692,7 +842,9 @@ export default function DrivingHudTab() {
                       onClick={() => setCameraSource('ACTION_CAM')}
                       className={`p-2 rounded-xl text-xs font-semibold flex flex-col items-center gap-1 border transition ${
                         cameraSource === 'ACTION_CAM'
-                          ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                          ? 'bg-blue-600/20 border-blue-500 text-blue-600 font-bold'
+                          : isLight
+                          ? 'bg-white border-amber-900/10 text-stone-600'
                           : 'bg-zinc-900 border-white/10 text-zinc-400'
                       }`}
                     >
@@ -705,7 +857,9 @@ export default function DrivingHudTab() {
                       onClick={() => setCameraSource('WEBRTC_CAM')}
                       className={`p-2 rounded-xl text-xs font-semibold flex flex-col items-center gap-1 border transition ${
                         cameraSource === 'WEBRTC_CAM'
-                          ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                          ? 'bg-blue-600/20 border-blue-500 text-blue-600 font-bold'
+                          : isLight
+                          ? 'bg-white border-amber-900/10 text-stone-600'
                           : 'bg-zinc-900 border-white/10 text-zinc-400'
                       }`}
                     >
@@ -717,7 +871,7 @@ export default function DrivingHudTab() {
 
                 {/* 수신 시뮬레이션 버튼들 */}
                 <div className="space-y-2">
-                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  <span className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-stone-500' : 'text-zinc-400'}`}>
                     실시간 메시지 수신 테스트 (TTS 낭독)
                   </span>
                   <div className="grid grid-cols-2 gap-2">
@@ -728,7 +882,11 @@ export default function DrivingHudTab() {
                         triggerSimulatedIncomingAlert('BRAKE_LIGHT');
                         setIsDemoDrawerOpen(false);
                       }}
-                      className="p-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs font-bold text-zinc-200 hover:border-blue-400 text-left"
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-left transition ${
+                        isLight
+                          ? 'bg-white border-amber-900/10 text-stone-900 hover:border-blue-500 shadow-sm'
+                          : 'bg-zinc-900 border-white/10 text-zinc-200 hover:border-blue-400'
+                      }`}
                     >
                       🔊 브레이크등 고장 수신
                     </button>
@@ -739,7 +897,11 @@ export default function DrivingHudTab() {
                         triggerSimulatedIncomingAlert('OVERLOAD_BROADCAST');
                         setIsDemoDrawerOpen(false);
                       }}
-                      className="p-2.5 rounded-xl bg-zinc-900 border border-amber-500/30 text-xs font-bold text-amber-300 hover:border-amber-400 text-left"
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-left transition ${
+                        isLight
+                          ? 'bg-amber-50/90 border-amber-300 text-amber-950 hover:border-amber-500 shadow-sm'
+                          : 'bg-zinc-900 border-amber-500/30 text-amber-300 hover:border-amber-400'
+                      }`}
                     >
                       🔊 5km 화물위험 수신
                     </button>
@@ -750,7 +912,11 @@ export default function DrivingHudTab() {
                         triggerSimulatedIncomingAlert('YIELD_THANKS');
                         setIsDemoDrawerOpen(false);
                       }}
-                      className="p-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs font-bold text-emerald-300 hover:border-blue-400 text-left"
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-left transition ${
+                        isLight
+                          ? 'bg-white border-amber-900/10 text-emerald-700 hover:border-emerald-500 shadow-sm'
+                          : 'bg-zinc-900 border-white/10 text-emerald-300 hover:border-blue-400'
+                      }`}
                     >
                       🔊 양보 감사 수신
                     </button>
@@ -761,7 +927,11 @@ export default function DrivingHudTab() {
                         triggerSimulatedIncomingAlert('TUNING_QUESTION');
                         setIsDemoDrawerOpen(false);
                       }}
-                      className="p-2.5 rounded-xl bg-zinc-900 border border-white/10 text-xs font-bold text-zinc-200 hover:border-blue-400 text-left"
+                      className={`p-2.5 rounded-xl border text-xs font-bold text-left transition ${
+                        isLight
+                          ? 'bg-white border-amber-900/10 text-stone-900 hover:border-blue-500 shadow-sm'
+                          : 'bg-zinc-900 border-white/10 text-zinc-200 hover:border-blue-400'
+                      }`}
                     >
                       🔊 부품 문의 수신
                     </button>
@@ -770,7 +940,7 @@ export default function DrivingHudTab() {
 
                 {/* 음성 발화 시뮬레이션 프리셋 */}
                 <div className="space-y-2">
-                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                  <span className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-stone-500' : 'text-zinc-400'}`}>
                     음성 발화 프리셋 (AI 필터링 테스트)
                   </span>
                   <div className="space-y-1.5">
@@ -782,11 +952,13 @@ export default function DrivingHudTab() {
                         onClick={() => handleVoiceTextChange(preset.speech)}
                         className={`w-full p-2.5 rounded-xl border text-left text-xs font-medium transition ${
                           voiceInputText === preset.speech
-                            ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                            ? 'bg-blue-600/20 border-blue-500 text-blue-600 font-bold'
+                            : isLight
+                            ? 'bg-white border-amber-900/10 text-stone-800 hover:border-amber-300 shadow-sm'
                             : 'bg-zinc-900 border-white/10 text-zinc-300 hover:border-white/20'
                         }`}
                       >
-                        <span className="font-bold text-blue-400 mr-1.5">[{preset.badge}]</span>
+                        <span className="font-bold text-blue-600 mr-1.5">[{preset.badge}]</span>
                         {preset.label}
                       </button>
                     ))}
@@ -797,7 +969,7 @@ export default function DrivingHudTab() {
                 <div className="space-y-2">
                   <label
                     htmlFor="driver-voice-transcript-input"
-                    className="text-xs font-bold text-zinc-400 uppercase tracking-wider"
+                    className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-stone-500' : 'text-zinc-400'}`}
                   >
                     음성 텍스트 직접 입력 (AI 순화 테스트)
                   </label>
@@ -807,28 +979,38 @@ export default function DrivingHudTab() {
                     value={voiceInputText}
                     onChange={(e) => handleVoiceTextChange(e.target.value)}
                     placeholder="헤이 플레이트, 발화 내용..."
-                    className="w-full rounded-xl bg-zinc-900 border border-white/10 px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-blue-400"
+                    className={`w-full rounded-xl px-3 py-2 text-xs border focus:outline-none focus:border-blue-500 ${
+                      isLight
+                        ? 'bg-white border-amber-900/15 text-stone-900 placeholder-stone-400'
+                        : 'bg-zinc-900 border-white/10 text-white placeholder-zinc-500'
+                    }`}
                   />
                 </div>
 
                 {/* AI 정제 결과 박스 */}
-                <div className="p-3.5 rounded-2xl bg-zinc-900 border border-white/10 space-y-2">
+                <div
+                  className={`p-3.5 rounded-2xl border space-y-2 ${
+                    isLight
+                      ? 'bg-white border-amber-900/15 text-stone-900 shadow-sm'
+                      : 'bg-zinc-900 border-white/10 text-white'
+                  }`}
+                >
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-blue-400 flex items-center gap-1">
+                    <span className="font-bold text-blue-600 flex items-center gap-1">
                       <Sparkles className="h-3.5 w-3.5" /> AI 정제 결과
                     </span>
-                    <span className="font-mono text-zinc-400">
+                    <span className={`font-mono ${isLight ? 'text-stone-500' : 'text-zinc-400'}`}>
                       타겟: {aiAnalysis.matchedVehicle?.license_plate || selectedTargetPlate}
                     </span>
                   </div>
 
                   {aiAnalysis.hadProfanityOrAggression && (
-                    <div className="p-2 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs">
+                    <div className="p-2 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-700 text-xs">
                       {aiAnalysis.coachingNote}
                     </div>
                   )}
 
-                  <p className="text-xs font-medium text-white leading-relaxed">
+                  <p className="text-xs font-medium leading-relaxed">
                     “{aiAnalysis.sanitizedContent}”
                   </p>
 
@@ -839,7 +1021,7 @@ export default function DrivingHudTab() {
                       handleSendAnalyzedVoiceCommand();
                       setIsDemoDrawerOpen(false);
                     }}
-                    className="w-full mt-2 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition"
+                    className="w-full mt-2 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm"
                   >
                     <Send className="h-3.5 w-3.5" />
                     <span>정제된 메시지 발송하기</span>
@@ -851,7 +1033,11 @@ export default function DrivingHudTab() {
               <button
                 type="button"
                 onClick={() => setIsDemoDrawerOpen(false)}
-                className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-xs border border-white/10 mt-4"
+                className={`w-full py-2.5 rounded-xl font-bold text-xs border mt-4 transition ${
+                  isLight
+                    ? 'bg-stone-100 hover:bg-stone-200 text-stone-700 border-stone-300'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-white/10'
+                }`}
               >
                 닫기
               </button>
