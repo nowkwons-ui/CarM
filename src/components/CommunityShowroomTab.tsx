@@ -148,7 +148,7 @@ export default function CommunityShowroomTab() {
               />
               <div className="absolute top-3 left-3 flex items-center gap-1.5 rounded-xl bg-slate-950/90 px-3 py-1 text-xs font-bold text-emerald-300 border border-emerald-400/50 backdrop-blur-md">
                 <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                <span>Verified Owner · { maskLicensePlate(searchedVehicle.license_plate) }</span>
+                <span>Verified Owner · {searchedVehicle.masked_plate}</span>
               </div>
             </div>
 
@@ -251,13 +251,13 @@ export default function CommunityShowroomTab() {
                   type="button"
                   onClick={() => {
                     const res = sendDrivingMessage({
-                      receiverPlate: searchedVehicle.license_plate,
+                      receiverPlate: searchedVehicle.exact_plate,
                       messageType: 'COMPLIMENT',
                       content: `[쇼룸 방문 칭찬] ${searchedVehicle.model} (${searchedVehicle.color}) 차량 관리 상태와 드레스업이 정말 멋집니다!`,
                     });
                     if (res.ok) {
                       showToast(
-                        `[${searchedVehicle.license_plate}] 차주님께 차량 칭찬 메시지를 발송했습니다!`,
+                        `[${searchedVehicle.masked_plate}] 차주님께 차량 칭찬 메시지를 발송했습니다!`,
                         'emerald'
                       );
                     }
@@ -272,7 +272,7 @@ export default function CommunityShowroomTab() {
                   type="button"
                   onClick={() => {
                     const res = sendDrivingMessage({
-                      receiverPlate: searchedVehicle.license_plate,
+                      receiverPlate: searchedVehicle.exact_plate,
                       messageType: 'TUNING_ASK',
                       content: `[쇼룸 튜닝 문의] 장착하신 ${
                         searchedVehicle.tuning_specs.wheels ||
@@ -282,7 +282,7 @@ export default function CommunityShowroomTab() {
                     });
                     if (res.ok) {
                       showToast(
-                        `[${searchedVehicle.license_plate}] 차주님께 튜닝 스펙 문의를 발송했습니다!`,
+                        `[${searchedVehicle.masked_plate}] 차주님께 튜닝 스펙 문의를 발송했습니다!`,
                         'sky'
                       );
                     }
@@ -297,7 +297,7 @@ export default function CommunityShowroomTab() {
                   type="button"
                   onClick={() =>
                     openQuickGiftModal(
-                      searchedVehicle.license_plate,
+                      searchedVehicle.exact_plate,
                       `${searchedVehicle.brand} ${searchedVehicle.model}`
                     )
                   }

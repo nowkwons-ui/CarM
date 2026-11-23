@@ -10,7 +10,6 @@ import {
   Sparkles,
   Volume2,
   Gift,
-  CheckCircle2,
   AlertTriangle,
   Camera,
   Wifi,
@@ -108,6 +107,8 @@ export default function DrivingHudTab() {
   // WebRTC 실제 카메라 연결/해제 처리
   useEffect(() => {
     let stream: MediaStream | null = null;
+    let cancelled = false;
+
     if (cameraSource === 'WEBRTC_CAM') {
       if (
         typeof navigator !== 'undefined' &&
@@ -117,6 +118,10 @@ export default function DrivingHudTab() {
         navigator.mediaDevices
           .getUserMedia({ video: { facingMode: 'environment' } })
           .then((mediaStream) => {
+            if (cancelled) {
+              mediaStream.getTracks().forEach((t) => t.stop());
+              return;
+            }
             stream = mediaStream;
             setWebcamActive(true);
             if (videoRef.current) {
@@ -124,18 +129,19 @@ export default function DrivingHudTab() {
             }
           })
           .catch(() => {
-            setWebcamActive(false);
-            showToast(
-              '브라우저 카메라 권한이 없어 블랙박스 하이웨이 시뮬레이션 스트림으로 대체합니다.',
-              'amber'
-            );
+            if (!cancelled) {
+              setWebcamActive(false);
+              showToast(
+                '브라우저 카메라 권한이 없어 시뮬레이션 스트림으로 표시합니다.',
+                'amber'
+              );
+            }
           });
       }
-    } else {
-      setWebcamActive(false);
     }
 
     return () => {
+      cancelled = true;
       if (stream) {
         stream.getTracks().forEach((t) => t.stop());
       }
@@ -214,6 +220,16 @@ export default function DrivingHudTab() {
       );
       return;
     }
+
+    if (aiAnalysis.requiresTargetConfirmation && !aiAnalysis.matchedVehicle) {
+      showToast(
+        aiAnalysis.confirmationReason ||
+          '수신 차량을 특정하지 못했습니다. 화면의 번호판을 터치해 선택한 후 발송해 주세요.',
+        'amber'
+      );
+      return;
+    }
+
     const targetPlate =
       aiAnalysis.matchedVehicle?.license_plate || selectedTargetPlate;
 

@@ -1,3 +1,5 @@
+export type FeatureReadiness = 'COMPLETE' | 'PARTIAL' | 'DEMO';
+
 export type HonorTier = 'ROOKIE' | 'GUARDIAN' | 'MASTER' | 'HONOR_SOCIETY';
 
 export type StickerClaimStatus =
@@ -83,7 +85,7 @@ export interface Vehicle {
   id: string;
   user_id: string;
   license_plate: string; // 고유 ID (예: "12라 3466")
-  vin: string;           // 17자리 차대번호
+  vin: string;           // 17자리 차대번호 (민감정보 - 소유주 본인 또는 서버만 조회)
   registered_owner_name: string;
   ownership_role: OwnershipRole;
   primary_owner_consent_phone?: string;
@@ -95,12 +97,30 @@ export interface Vehicle {
   garage_bio: string;
   car_wash_logs: CarWashLog[];
   verification_status: VerificationStatus;
+  verification_rejection_reason?: string;
   ocr_confidence_score: number;
   plate_photo_url: string;
-  registration_doc_url: string;
+  registration_doc_url: string; // 비공개
   is_primary: boolean;
   owner_nickname?: string;
   owner_honor_tier?: HonorTier;
+}
+
+/** 공개 차고/쇼룸 열람용 뷰 모델 (민감 개인정보 제거) */
+export interface PublicGarageProfile {
+  id: string;
+  masked_plate: string;     // 예: "***라 3466"
+  exact_plate: string;      // 칭찬/선물 대상 지정을 위한 정규화 번호판
+  brand: string;
+  model: string;
+  model_year: number;
+  color: string;
+  tuning_specs: TuningSpecs;
+  garage_bio: string;
+  car_wash_logs: CarWashLog[];
+  plate_photo_url: string;
+  owner_nickname: string;
+  owner_honor_tier: HonorTier;
 }
 
 export interface ScannedBufferVehicle {
@@ -113,7 +133,7 @@ export interface ScannedBufferVehicle {
   lane: 'LEFT' | 'CENTER' | 'RIGHT';
   distanceMeters: number;
   ocrConfidence: number;
-  detectedAt: string; // ISO string (최근 3분 버퍼 유지)
+  detectedAt: string;
   bbox: {
     topPercent: number;
     leftPercent: number;
@@ -122,6 +142,8 @@ export interface ScannedBufferVehicle {
   };
   suspectedIssue?: string;
   tuningHighlight?: string;
+  /** 시뮬레이션 샘플 여부 (실제 ALPR 하드웨어 감지와 구분) */
+  isSimulationSample?: boolean;
 }
 
 export interface DrivingMessage {
@@ -142,7 +164,7 @@ export interface DrivingMessage {
   helpful_acknowledged: boolean;
   honor_points_awarded: number;
   is_read: boolean;
-  is_dismissed: boolean; // 주행 종료 시 자동 말소 여부
+  is_dismissed: boolean;
   direction: 'INCOMING' | 'OUTGOING' | 'BROADCAST';
   created_at: string;
 }
@@ -197,8 +219,17 @@ export interface GiftTransaction {
   message_id?: string;
   thank_you_note: string;
   payment_status: PaymentStatus;
-  coupon_code: string;
+  coupon_code: string | null; // PENDING 상태에서는 null
   direction: 'RECEIVED' | 'SENT';
   redeemed_at?: string;
   created_at: string;
+}
+
+export interface HonorLedgerEntry {
+  id: string;
+  points: number;
+  reason: string;
+  sourceType: 'DEFECT_ALERT_HELPFUL' | 'YIELD_THANKS' | 'GIFT_SENT' | 'COMMUNITY_POST' | 'ADMIN_BONUS';
+  relatedPlate?: string;
+  createdAt: string;
 }

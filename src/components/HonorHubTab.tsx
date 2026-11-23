@@ -10,7 +10,7 @@ import {
   Sparkles,
   TrendingUp,
   PackageCheck,
-  MapPin,
+  History,
 } from 'lucide-react';
 import { usePlateTalk } from '@/context/PlateTalkContext';
 import { calculateHonorTier, maskLicensePlate } from '@/lib/supabase';
@@ -83,7 +83,7 @@ const MONTHLY_HERO_RANKING = [
 ];
 
 export default function HonorHubTab() {
-  const { user, activeVehicle, claimHonorSticker, addHonorPoints } =
+  const { user, activeVehicle, claimHonorSticker, addHonorPoints, honorLedger } =
     usePlateTalk();
 
   const tierInfo = calculateHonorTier(user.honor_points);
@@ -228,19 +228,38 @@ export default function HonorHubTab() {
             >
               +30 PT (양보운전 감사 수신)
             </button>
-            <button
-              type="button"
-              id="honor-sim-promote-btn"
-              onClick={() =>
-                addHonorPoints(
-                  500,
-                  '이달의 도로 위 안전 영웅 특별 보너스 (아너 소사이어티 승급 체험)'
-                )
-              }
-              className="rounded-xl bg-amber-500/20 border border-amber-400/50 px-3 py-1.5 text-xs font-bold text-amber-300 hover:bg-amber-500/30"
-            >
-              +500 PT (상위 1% 아너 소사이어티 승급 테스트)
-            </button>
+          </div>
+        </div>
+
+        {/* 포인트 적립 히스토리 내역 (원장) */}
+        <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-xs font-bold text-white">
+              <History className="h-4 w-4 text-sky-400" />
+              포인트 적립 내역 (검증 원장)
+            </span>
+            <span className="text-[11px] text-slate-400">
+              최근 {honorLedger.length}건
+            </span>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {honorLedger.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-2.5 text-xs"
+              >
+                <div>
+                  <span className="font-semibold text-slate-200">
+                    {item.reason}
+                  </span>
+                  <p className="text-[10px] text-slate-500">{item.createdAt}</p>
+                </div>
+                <span className="font-mono text-xs font-bold text-emerald-400">
+                  +{item.points} PT
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>

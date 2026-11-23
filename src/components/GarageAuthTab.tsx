@@ -97,7 +97,8 @@ export default function GarageAuthTab() {
         regDocPlateText,
         regDocVinText,
         regDocOwnerName,
-        ownershipRole
+        ownershipRole,
+        result.status === 'REJECTED' ? result.summaryMessage : undefined
       );
     }, 650);
   };
@@ -169,10 +170,17 @@ export default function GarageAuthTab() {
         );
       case 'REJECTED':
         return (
-          <span className="flex items-center gap-1.5 rounded-xl bg-rose-500/20 border border-rose-400/50 px-3 py-1.5 text-xs font-extrabold text-rose-300">
-            <XCircle className="h-4 w-4 text-rose-400" />
-            REJECTED (반려 · 발송 및 작성 차단)
-          </span>
+          <div className="flex flex-col items-end gap-1">
+            <span className="flex items-center gap-1.5 rounded-xl bg-rose-500/20 border border-rose-400/50 px-3 py-1.5 text-xs font-extrabold text-rose-300">
+              <XCircle className="h-4 w-4 text-rose-400" />
+              REJECTED (반려 · 발송 및 작성 차단)
+            </span>
+            {activeVehicle.verification_rejection_reason && (
+              <span className="text-[10px] text-rose-400/90 max-w-xs text-right">
+                사유: {activeVehicle.verification_rejection_reason}
+              </span>
+            )}
+          </div>
         );
       default:
         return (

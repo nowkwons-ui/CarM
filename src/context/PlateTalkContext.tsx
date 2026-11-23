@@ -1,22 +1,37 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+} from 'react';
 import {
   CommunityCategory,
   CommunityPost,
   DrivingMessage,
   DrivingMessageType,
+  FeatureReadiness,
   GiftItem,
   GiftTransaction,
+  HonorLedgerEntry,
   HonorTier,
   OwnershipRole,
+  PublicGarageProfile,
   ScannedBufferVehicle,
   StickerClaimStatus,
   UserProfile,
   Vehicle,
   VerificationStatus,
 } from '@/types/platetalk';
-import { calculateHonorTier, maskLicensePlate } from '@/lib/supabase';
+import {
+  calculateHonorTier,
+  isValidPlate,
+  maskLicensePlate,
+  normalizePlate,
+} from '@/lib/supabase';
 import { speakDrivingBriefing } from '@/lib/voiceAiEngine';
 
 export type ActiveTabId = 'HUD' | 'ALERTS_GIFTS' | 'COMMUNITY' | 'HONOR' | 'GARAGE';
@@ -28,9 +43,22 @@ interface QuickGiftModalState {
   relatedMessageId?: string;
 }
 
+export interface FeatureStatusItem {
+  id: string;
+  name: string;
+  status: FeatureReadiness;
+  note: string;
+}
+
 interface PlateTalkContextValue {
+  // 모드 및 탭
   activeTab: ActiveTabId;
   setActiveTab: (tab: ActiveTabId) => void;
+  isDemoMode: boolean;
+  setIsDemoMode: (val: boolean) => void;
+  featureReadinessCatalog: FeatureStatusItem[];
+
+  // 사용자 및 차량 관리
   user: UserProfile;
   vehicles: Vehicle[];
   activeVehicle: Vehicle;
@@ -40,7 +68,8 @@ interface PlateTalkContextValue {
     updatedPlate?: string,
     updatedVin?: string,
     updatedOwnerName?: string,
-    role?: OwnershipRole
+    role?: OwnershipRole,
+    rejectionReason?: string
   ) => void;
   addSecondaryVehicle: (vehicleData: {
     license_plate: string;
@@ -51,7 +80,9 @@ interface PlateTalkContextValue {
     model: string;
     color: string;
     verification_status: VerificationStatus;
-  }) => void;
+  }) => { ok: boolean; error?: string };
+
+  // 드라이빙 HUD & ALPR 버퍼
   scannedVehicles: ScannedBufferVehicle[];
   selectedTargetPlate: string;
   setSelectedTargetPlate: (plate: string) => void;
@@ -60,6 +91,8 @@ interface PlateTalkContextValue {
   activeHudIncomingMessage: DrivingMessage | null;
   dismissHudOverlayCard: () => void;
   toggleDrivingMode: () => { archivedCount: number; newMode: boolean };
+
+  // 메시징
   drivingMessages: DrivingMessage[];
   sendDrivingMessage: (params: {
     receiverPlate: string;
@@ -69,9 +102,13 @@ interface PlateTalkContextValue {
     aiSanitized?: boolean;
     broadcastRadiusKm?: number;
   }) => { ok: boolean; error?: string; message?: DrivingMessage };
-  triggerSimulatedIncomingAlert: (presetType: 'BRAKE_LIGHT' | 'OVERLOAD_BROADCAST' | 'YIELD_THANKS' | 'TUNING_QUESTION') => void;
+  triggerSimulatedIncomingAlert: (
+    presetType: 'BRAKE_LIGHT' | 'OVERLOAD_BROADCAST' | 'YIELD_THANKS' | 'TUNING_QUESTION'
+  ) => void;
   acknowledgeHelpfulMessage: (messageId: string) => void;
   restoreArchivedMessage: (messageId: string) => void;
+
+  // 커뮤니티 & 쇼룸
   communityPosts: CommunityPost[];
   createCommunityPost: (params: {
     category: CommunityCategory;
@@ -82,6 +119,9 @@ interface PlateTalkContextValue {
   }) => { ok: boolean; error?: string };
   togglePostLike: (postId: string) => void;
   addPostComment: (postId: string, commentText: string) => { ok: boolean; error?: string };
+  lookupGarageByPlate: (plateQuery: string) => PublicGarageProfile | null;
+
+  // 기프트샵 & 결제
   giftCatalog: GiftItem[];
   giftTransactions: GiftTransaction[];
   quickGiftModal: QuickGiftModalState;
@@ -94,6 +134,9 @@ interface PlateTalkContextValue {
     relatedMessageId?: string;
   }) => { ok: boolean; couponCode?: string; error?: string };
   redeemReceivedGift: (giftId: string) => void;
+
+  // 명예 시스템
+  honorLedger: HonorLedgerEntry[];
   claimHonorSticker: (shippingAddress: {
     recipientName: string;
     phone: string;
@@ -101,11 +144,23 @@ interface PlateTalkContextValue {
     addressLine1: string;
     addressLine2: string;
   }) => void;
-  addHonorPoints: (points: number, reason: string) => void;
-  lookupGarageByPlate: (plateQuery: string) => Vehicle | null;
+  addHonorPoints: (points: number, reason: string, sourceType?: HonorLedgerEntry['sourceType']) => void;
+
+  // 토스트 피드백
   toastBanner: { message: string; tone: 'emerald' | 'amber' | 'sky' | 'rose' } | null;
   showToast: (message: string, tone?: 'emerald' | 'amber' | 'sky' | 'rose') => void;
 }
+
+const FEATURE_STATUS_CATALOG: FeatureStatusItem[] = [
+  { id: 'hud-tts', name: 'Web Speech TTS 음성 브리핑', status: 'COMPLETE', note: '브라우저 음성 합성 엔진 실제 구동' },
+  { id: 'hud-stt', name: 'Web Speech STT 음성 명령', status: 'COMPLETE', note: '마이크 권한 획득 시 실시간 인식' },
+  { id: 'alpr-cam', name: '실시간 전방 ALPR 번호판 검출', status: 'DEMO', note: '서버 Vision 모델 또는 엣지 OpenCV 연결 시 실시간화' },
+  { id: 'rtsp-stream', name: '블랙박스 RTSP Wi-Fi 스트림', status: 'PARTIAL', note: 'WebRTC 스트림 지원, 전용 게이트웨이 필요' },
+  { id: 'ocr-cross', name: '등록증-번호판 OCR 교차 검증', status: 'COMPLETE', note: '규격 VIN 체크섬 및 정규화 대조 엔진' },
+  { id: 'honor-tier', name: '명예 등급 및 스티커 자격 연동', status: 'COMPLETE', note: '4등급 게이미피케이션 및 트리거 검증' },
+  { id: 'in-app-gift', name: '번호판 기반 기프티콘 선물', status: 'PARTIAL', note: '바코드 발행 및 모달 연동 완료, 실제 PG 결제 연결 대기' },
+  { id: '5km-broadcast', name: '반경 5km 위험 브로드캐스트', status: 'PARTIAL', note: 'PostGIS 지리 쿼리 준비 완료, 웹소켓 연동 대기' },
+];
 
 const INITIAL_USER: UserProfile = {
   id: 'usr-platetalk-001',
@@ -277,6 +332,7 @@ const INITIAL_SCANNED_BUFFER: ScannedBufferVehicle[] = [
       heightPercent: 17,
     },
     suspectedIssue: '우측 브레이크등 간헐적 점등 불량 감지 의심',
+    isSimulationSample: true,
   },
   {
     id: 'scan-right-truck',
@@ -296,6 +352,7 @@ const INITIAL_SCANNED_BUFFER: ScannedBufferVehicle[] = [
       heightPercent: 22,
     },
     suspectedIssue: '후방 적재함 로프 결박 느슨함 주의',
+    isSimulationSample: true,
   },
   {
     id: 'scan-left-suv',
@@ -315,6 +372,7 @@ const INITIAL_SCANNED_BUFFER: ScannedBufferVehicle[] = [
       heightPercent: 16,
     },
     tuningHighlight: '툴레 로우프로파일 루프박스 & 블랙 휠 장착',
+    isSimulationSample: true,
   },
 ];
 
@@ -545,10 +603,39 @@ const INITIAL_GIFTS: GiftTransaction[] = [
   },
 ];
 
+const INITIAL_HONOR_LEDGER: HonorLedgerEntry[] = [
+  {
+    id: 'led-001',
+    points: 50,
+    reason: '우측 주유구 열림 안전 고지 "도움 됐어요" 감사 수신',
+    sourceType: 'DEFECT_ALERT_HELPFUL',
+    relatedPlate: '54나 8821',
+    createdAt: '3일 전',
+  },
+  {
+    id: 'led-002',
+    points: 30,
+    reason: '판교 분기점 차선 양보 감사 메시지 수신',
+    sourceType: 'YIELD_THANKS',
+    relatedPlate: '123가 4568',
+    createdAt: '12분 전',
+  },
+  {
+    id: 'led-003',
+    points: 20,
+    reason: '인증 오너 쇼룸 G80 스포츠 게시글 작성',
+    sourceType: 'COMMUNITY_POST',
+    createdAt: '2시간 전',
+  },
+];
+
 const PlateTalkContext = createContext<PlateTalkContextValue | undefined>(undefined);
+
+const SEND_COOLDOWN_MS = 60000; // 60초 동일 대상 발송 쿨다운
 
 export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
   const [activeTab, setActiveTab] = useState<ActiveTabId>('HUD');
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(true);
   const [user, setUser] = useState<UserProfile>(INITIAL_USER);
   const [vehicles, setVehicles] = useState<Vehicle[]>(INITIAL_VEHICLES);
   const [activeVehicleId, setActiveVehicleId] = useState<string>('veh-genesis-g80');
@@ -566,6 +653,8 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
     useState<CommunityPost[]>(INITIAL_COMMUNITY_POSTS);
   const [giftTransactions, setGiftTransactions] =
     useState<GiftTransaction[]>(INITIAL_GIFTS);
+  const [honorLedger, setHonorLedger] =
+    useState<HonorLedgerEntry[]>(INITIAL_HONOR_LEDGER);
 
   const [quickGiftModal, setQuickGiftModal] = useState<QuickGiftModalState>({
     isOpen: false,
@@ -578,24 +667,35 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
     tone: 'emerald' | 'amber' | 'sky' | 'rose';
   } | null>(null);
 
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const sendCooldownRef = useRef<Map<string, number>>(new Map());
+
   const showToast = useCallback(
     (
       message: string,
       tone: 'emerald' | 'amber' | 'sky' | 'rose' = 'emerald'
     ) => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
       setToastBanner({ message, tone });
-      setTimeout(() => {
-        setToastBanner((prev) => (prev?.message === message ? null : prev));
+      toastTimerRef.current = setTimeout(() => {
+        setToastBanner(null);
       }, 4200);
     },
     []
   );
 
-  const activeVehicle =
-    vehicles.find((v) => v.id === activeVehicleId) || vehicles[0];
+  const activeVehicle = useMemo(() => {
+    return vehicles.find((v) => v.id === activeVehicleId) || vehicles[0];
+  }, [vehicles, activeVehicleId]);
 
   const addHonorPoints = useCallback(
-    (pointsToAdd: number, reason: string) => {
+    (
+      pointsToAdd: number,
+      reason: string,
+      sourceType: HonorLedgerEntry['sourceType'] = 'DEFECT_ALERT_HELPFUL'
+    ) => {
       setUser((prev) => {
         const nextPoints = prev.honor_points + pointsToAdd;
         const nextTierInfo = calculateHonorTier(nextPoints);
@@ -610,6 +710,16 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
           sticker_claim_status: nextClaimStatus,
         };
       });
+
+      const newEntry: HonorLedgerEntry = {
+        id: `led-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        points: pointsToAdd,
+        reason,
+        sourceType,
+        createdAt: '방금 전',
+      };
+      setHonorLedger((prev) => [newEntry, ...prev]);
+
       showToast(`명예 포인트 +${pointsToAdd}pt 적립! (${reason})`, 'emerald');
     },
     [showToast]
@@ -621,7 +731,8 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
       updatedPlate?: string,
       updatedVin?: string,
       updatedOwnerName?: string,
-      role?: OwnershipRole
+      role?: OwnershipRole,
+      rejectionReason?: string
     ) => {
       setVehicles((prev) =>
         prev.map((v) =>
@@ -634,6 +745,10 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
                 registered_owner_name:
                   updatedOwnerName || v.registered_owner_name,
                 ownership_role: role || v.ownership_role,
+                verification_rejection_reason:
+                  status === 'REJECTED'
+                    ? rejectionReason || '등록증 기재 정보와 일치하지 않거나 위변조 의심으로 반려되었습니다.'
+                    : undefined,
                 ocr_confidence_score: status === 'VERIFIED' ? 99.6 : 62.0,
               }
             : v
@@ -642,7 +757,7 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
 
       if (status === 'VERIFIED') {
         showToast(
-          '차량 번호판 + 등록증 OCR 교차 인증 완료! 모든 발신 및 커뮤니티 기능이 해금되었습니다.',
+          '차량 번호판 + 등록증 OCR 교차 인증 완료! 모든 발신 및 커뮤니티 권한이 해금되었습니다.',
           'emerald'
         );
       } else if (status === 'PENDING') {
@@ -671,6 +786,17 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
       color: string;
       verification_status: VerificationStatus;
     }) => {
+      const normInputPlate = normalizePlate(vehicleData.license_plate);
+
+      // 중복 등록 방지
+      const alreadyExists = vehicles.some(
+        (v) => normalizePlate(v.license_plate) === normInputPlate
+      );
+      if (alreadyExists) {
+        showToast(`이미 내 차고에 등록된 번호판입니다: ${vehicleData.license_plate}`, 'amber');
+        return { ok: false, error: 'ALREADY_EXISTS' };
+      }
+
       const newId = `veh-custom-${Date.now()}`;
       const newVehicle: Vehicle = {
         id: newId,
@@ -698,14 +824,16 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
         owner_nickname: user.nickname,
         owner_honor_tier: user.honor_tier,
       };
+
       setVehicles((prev) => [newVehicle, ...prev]);
       setActiveVehicleId(newId);
       showToast(
         `신규 차량 [${vehicleData.license_plate}] 등록 완료 (${vehicleData.verification_status})`,
         vehicleData.verification_status === 'VERIFIED' ? 'emerald' : 'amber'
       );
+      return { ok: true };
     },
-    [showToast, user.honor_tier, user.id, user.nickname]
+    [showToast, user.honor_tier, user.id, user.nickname, vehicles]
   );
 
   const sendDrivingMessage = useCallback(
@@ -717,7 +845,7 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
       aiSanitized?: boolean;
       broadcastRadiusKm?: number;
     }) => {
-      // [3.1.3] 미인증 가입자는 눈팅(읽기)만 가능하며 메시지 발송 불가
+      // 1. 소유주 인증 권한 체크
       if (activeVehicle.verification_status !== 'VERIFIED') {
         showToast(
           `발송 차단: 현재 차량 인증 상태가 [${activeVehicle.verification_status}]입니다. 번호판+등록증 OCR 인증 완료 후 발송할 수 있습니다.`,
@@ -730,17 +858,36 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      const pointsAwarded =
-        params.messageType === 'OVERLOAD_WARN'
-          ? 40
-          : params.messageType === 'DEFECT_ALERT'
-          ? 25
-          : params.messageType === 'YIELD_THANKS'
-          ? 30
-          : 15;
+      // 2. 번호판 형식 검증
+      if (!isValidPlate(params.receiverPlate) && params.receiverPlate !== 'ALL_5KM_RADIUS') {
+        showToast(`올바른 대한민국 번호판 형식이 아닙니다: ${params.receiverPlate}`, 'amber');
+        return { ok: false, error: 'INVALID_PLATE_FORMAT' };
+      }
 
+      // 3. 자기 자신에게 발송 금지
+      const normSender = normalizePlate(activeVehicle.license_plate);
+      const normReceiver = normalizePlate(params.receiverPlate);
+      if (normSender === normReceiver) {
+        showToast('내 차량 번호판에는 메시지를 보낼 수 없습니다.', 'amber');
+        return { ok: false, error: 'CANNOT_SEND_TO_SELF' };
+      }
+
+      // 4. 동일 대상 60초 쿨다운
+      const lastSentTime = sendCooldownRef.current.get(normReceiver) || 0;
+      const now = Date.now();
+      if (now - lastSentTime < SEND_COOLDOWN_MS) {
+        const remainingSec = Math.ceil((SEND_COOLDOWN_MS - (now - lastSentTime)) / 1000);
+        showToast(
+          `연속 발송 방지: [${params.receiverPlate}] 차량에는 ${remainingSec}초 후에 다시 보낼 수 있습니다.`,
+          'amber'
+        );
+        return { ok: false, error: 'RATE_LIMITED' };
+      }
+      sendCooldownRef.current.set(normReceiver, now);
+
+      const isBroadcast = params.messageType === 'OVERLOAD_WARN';
       const newMessage: DrivingMessage = {
-        id: `msg-${Date.now()}`,
+        id: `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         sender_vehicle_id: activeVehicle.id,
         sender_plate_snapshot: activeVehicle.license_plate,
         sender_vehicle_summary: `${activeVehicle.color} ${activeVehicle.model}`,
@@ -752,27 +899,27 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
         location_lat: 37.4021,
         location_lng: 127.1086,
         location_name: '경부고속도로 서울 방향 판교 구간',
-        broadcast_radius_km: params.broadcastRadiusKm || 0,
+        broadcast_radius_km: isBroadcast ? 5.0 : 0,
         helpful_acknowledged: false,
-        honor_points_awarded: pointsAwarded,
+        // 중요: 발신만으로 포인트를 자가 적립하지 않음 (수신자 '도움 됐어요' 승인 시 적립)
+        honor_points_awarded: 0,
         is_read: true,
         is_dismissed: false,
-        direction:
-          (params.broadcastRadiusKm || 0) > 0 ? 'BROADCAST' : 'OUTGOING',
+        direction: isBroadcast ? 'BROADCAST' : 'OUTGOING',
         created_at: '방금 전',
       };
 
       setDrivingMessages((prev) => [newMessage, ...prev]);
-      addHonorPoints(
-        pointsAwarded,
-        params.messageType === 'OVERLOAD_WARN'
-          ? '화물 낙하 위험 경고 + 반경 5km 브로드캐스트'
-          : '안전 주행 실시간 소통 발송'
+      showToast(
+        isBroadcast
+          ? `[${params.receiverPlate}] 화물 위험 경고 및 반경 5km 동시 브로드캐스트 발송 완료!`
+          : `[${params.receiverPlate}] 차량에 안전 메시지를 발송했습니다. 상대방이 감사를 표하면 명예 포인트가 적립됩니다.`,
+        'emerald'
       );
 
       return { ok: true, message: newMessage };
     },
-    [activeVehicle, addHonorPoints, showToast]
+    [activeVehicle, showToast]
   );
 
   const triggerSimulatedIncomingAlert = useCallback(
@@ -858,7 +1005,7 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
         };
         ttsScript =
           '기분 좋은 메시지입니다! 123가 4568 차량으로부터 양보운전 감사 인사와 함께 명예 포인트 30점이 도착했습니다.';
-        addHonorPoints(30, '양보운전 감사 메시지 수신');
+        addHonorPoints(30, '양보운전 감사 메시지 수신', 'YIELD_THANKS');
       } else {
         incoming = {
           id: `msg-in-${Date.now()}`,
@@ -875,7 +1022,7 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
           location_name: '경부고속도로 서울 톨게이트 방향',
           broadcast_radius_km: 0,
           helpful_acknowledged: false,
-          honor_points_awarded: 15,
+          honor_points_awarded: 0,
           is_read: true,
           is_dismissed: false,
           direction: 'INCOMING',
@@ -905,12 +1052,8 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
     setIsTtsSpeaking(false);
   }, []);
 
-  /**
-   * [3.2.3] 시동 종료 또는 드라이빙 모드 해제 시 읽은 메시지 자동 말소 (Auto-Archiving)
-   */
   const toggleDrivingMode = useCallback(() => {
     if (isDrivingMode) {
-      // 주행 종료 -> 읽은(is_read=true) 메시지들을 알림 센터에서 자동 말소(is_dismissed=true)
       let archivedCount = 0;
       setDrivingMessages((prev) =>
         prev.map((m) => {
@@ -924,14 +1067,14 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
       setIsDrivingMode(false);
       setActiveHudIncomingMessage(null);
       showToast(
-        `주행 종료 감지: 주행 중 브리핑 완료된 메시지 ${archivedCount}건이 알림 센터에서 자동 말소(아카이브 이동)되었습니다.`,
+        `주행 종료: 브리핑 완료된 메시지 ${archivedCount}건이 알림 센터에서 자동 말소(히스토리 보관)되었습니다.`,
         'sky'
       );
       return { archivedCount, newMode: false };
     } else {
       setIsDrivingMode(true);
       showToast(
-        '드라이빙 HUD 모드가 활성화되었습니다. 전방 번호판 실시간 스캔 및 TTS 자동 브리핑을 시작합니다.',
+        '드라이빙 HUD 모드가 활성화되었습니다. 핸즈프리 음성 인식 및 안전 레이더를 가동합니다.',
         'emerald'
       );
       return { archivedCount: 0, newMode: true };
@@ -956,7 +1099,8 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
 
       addHonorPoints(
         50,
-        `[${targetMsg.sender_plate_snapshot}] 안전 고지 '도움 됐어요' 감사 인증 보상`
+        `[${targetMsg.sender_plate_snapshot}] 위험 고지 '도움 됐어요' 감사 확인`,
+        'DEFECT_ALERT_HELPFUL'
       );
     },
     [activeHudIncomingMessage?.id, addHonorPoints, drivingMessages]
@@ -1019,7 +1163,7 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
       };
 
       setCommunityPosts((prev) => [newPost, ...prev]);
-      addHonorPoints(20, '인증 오너 쇼룸/커뮤니티 게시글 작성');
+      addHonorPoints(20, '인증 오너 쇼룸 게시글 작성', 'COMMUNITY_POST');
       return { ok: true };
     },
     [activeVehicle, addHonorPoints, showToast, user.honor_tier, user.nickname]
@@ -1033,7 +1177,7 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
         return {
           ...p,
           liked_by_me: liked,
-          likes_count: liked ? p.likes_count + 1 : p.likes_count - 1,
+          likes_count: liked ? p.likes_count + 1 : Math.max(0, p.likes_count - 1),
         };
       })
     );
@@ -1061,11 +1205,9 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
             comments: [
               ...p.comments,
               {
-                id: `cmt-${Date.now()}`,
+                id: `cmt-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
                 author_nickname: user.nickname,
-                author_plate_masked: maskLicensePlate(
-                  activeVehicle.license_plate
-                ),
+                author_plate_masked: maskLicensePlate(activeVehicle.license_plate),
                 content: commentText,
                 created_at: '방금 전',
               },
@@ -1105,6 +1247,11 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
       thankYouNote: string;
       relatedMessageId?: string;
     }) => {
+      if (!isValidPlate(params.receiverPlate)) {
+        showToast(`유효하지 않은 번호판 형식입니다: ${params.receiverPlate}`, 'amber');
+        return { ok: false, error: 'INVALID_PLATE' };
+      }
+
       const item = GIFT_CATALOG.find((g) => g.id === params.itemId);
       if (!item) {
         return { ok: false, error: '상품을 찾을 수 없습니다.' };
@@ -1135,10 +1282,10 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
       };
 
       setGiftTransactions((prev) => [tx, ...prev]);
-      addHonorPoints(60, `[${params.receiverPlate}] 차량에 감사 기프티콘 선물 발송`);
+      addHonorPoints(60, `[${params.receiverPlate}] 차량에 감사 기프티콘 선물 발송`, 'GIFT_SENT');
       return { ok: true, couponCode };
     },
-    [activeVehicle.license_plate, addHonorPoints, user.id]
+    [activeVehicle.license_plate, addHonorPoints, showToast, user.id]
   );
 
   const redeemReceivedGift = useCallback(
@@ -1157,7 +1304,7 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
             : g
         )
       );
-      showToast('기프티콘 바코드 사용(교환) 완료 처리되었습니다!', 'emerald');
+      showToast('기프티콘 바코드 교환이 완료되었습니다!', 'emerald');
     },
     [showToast]
   );
@@ -1175,27 +1322,44 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
         sticker_claim_status: 'REQUESTED',
         sticker_shipping_address: {
           ...shippingAddress,
-          requestedAt: '2026-11-12',
+          requestedAt: new Date().toISOString().split('T')[0],
         },
       }));
       showToast(
-        `고유 시리얼 [${user.sticker_serial_number}] 각인 홀로그램 메탈 명예 스티커 무료 발송 신청이 완료되었습니다!`,
+        `고유 시리얼 [${user.sticker_serial_number}] 각인 실물 명예 엠블럼 무료 배송 신청이 접수되었습니다!`,
         'emerald'
       );
     },
     [showToast, user.sticker_serial_number]
   );
 
+  /**
+   * PII(개인정보)가 철저히 배제된 공개 차고 프로필 조회
+   * - VIN, 소유주 실명, 등록증 원본 URL은 절대 반환하지 않음
+   */
   const lookupGarageByPlate = useCallback(
-    (plateQuery: string): Vehicle | null => {
-      const normalized = plateQuery.replace(/\s+/g, '').trim();
-      if (!normalized) return null;
-      return (
-        vehicles.find((v) => {
-          const clean = v.license_plate.replace(/\s+/g, '');
-          return clean.includes(normalized) || v.license_plate === plateQuery;
-        }) || null
-      );
+    (plateQuery: string): PublicGarageProfile | null => {
+      const cleanTarget = normalizePlate(plateQuery);
+      if (!cleanTarget) return null;
+
+      const found = vehicles.find((v) => normalizePlate(v.license_plate) === cleanTarget);
+      if (!found || found.verification_status !== 'VERIFIED') return null;
+
+      return {
+        id: found.id,
+        masked_plate: maskLicensePlate(found.license_plate),
+        exact_plate: found.license_plate,
+        brand: found.brand,
+        model: found.model,
+        model_year: found.model_year,
+        color: found.color,
+        tuning_specs: found.tuning_specs,
+        garage_bio: found.garage_bio,
+        car_wash_logs: found.car_wash_logs,
+        plate_photo_url: found.plate_photo_url,
+        owner_nickname: found.owner_nickname || '인증오너',
+        owner_honor_tier: found.owner_honor_tier || 'ROOKIE',
+      };
     },
     [vehicles]
   );
@@ -1205,6 +1369,9 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
       value={{
         activeTab,
         setActiveTab,
+        isDemoMode,
+        setIsDemoMode,
+        featureReadinessCatalog: FEATURE_STATUS_CATALOG,
         user,
         vehicles,
         activeVehicle,
@@ -1228,6 +1395,7 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
         createCommunityPost,
         togglePostLike,
         addPostComment,
+        lookupGarageByPlate,
         giftCatalog: GIFT_CATALOG,
         giftTransactions,
         quickGiftModal,
@@ -1235,9 +1403,9 @@ export function PlateTalkProvider({ children }: { children: React.ReactNode }) {
         closeQuickGiftModal,
         sendGiftByPlate,
         redeemReceivedGift,
+        honorLedger,
         claimHonorSticker,
         addHonorPoints,
-        lookupGarageByPlate,
         toastBanner,
         showToast,
       }}

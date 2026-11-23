@@ -446,9 +446,30 @@ export default function AlertsAndGiftsTab() {
                       ? `받은 선물 (From ${tx.sender_plate})`
                       : `보낸 선물 (To ${tx.receiver_plate})`}
                   </span>
-                  <span className="text-[11px] text-slate-400">
-                    {tx.created_at}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`rounded-md px-1.5 py-0.5 text-[9px] font-extrabold ${
+                        tx.payment_status === 'PAID'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
+                          : tx.payment_status === 'PENDING'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-400/40'
+                          : tx.payment_status === 'REDEEMED'
+                          ? 'bg-slate-800 text-slate-400'
+                          : 'bg-rose-500/20 text-rose-300'
+                      }`}
+                    >
+                      {tx.payment_status === 'PAID'
+                        ? '결제완료'
+                        : tx.payment_status === 'PENDING'
+                        ? 'PG 결제대기'
+                        : tx.payment_status === 'REDEEMED'
+                        ? '사용완료'
+                        : tx.payment_status}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      {tx.created_at}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="mt-2 flex items-center justify-between">
@@ -473,7 +494,7 @@ export default function AlertsAndGiftsTab() {
                       모바일 바코드 PIN
                     </span>
                     <span className="font-mono text-xs font-bold tracking-wider text-sky-300">
-                      {tx.coupon_code}
+                      {tx.coupon_code || '결제 확인 후 바코드 발급'}
                     </span>
                   </div>
 
