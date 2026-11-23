@@ -82,6 +82,7 @@ export default function DrivingHudTab() {
     acknowledgeHelpfulMessage,
     openQuickGiftModal,
     addHonorPoints,
+    updateVerificationStatus,
     showToast,
   } = usePlateTalk();
 
@@ -974,6 +975,154 @@ export default function DrivingHudTab() {
                       }`}
                     >
                       +30 PT (양보 감사)
+                    </button>
+                  </div>
+                </div>
+
+                {/* 차량 소유주 인증 권한 시뮬레이션 */}
+                <div className="space-y-2">
+                  <span className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-stone-500' : 'text-zinc-400'}`}>
+                    차량 인증 권한 시뮬레이션
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      id="quick-auth-state-VERIFIED"
+                      onClick={() => {
+                        updateVerificationStatus('VERIFIED', '정상 인증 완료 (소유주 검증 통과)');
+                        showToast('차량 소유주 인증이 완료(VERIFIED)되었습니다.', 'emerald');
+                      }}
+                      className={`p-2 rounded-xl border text-xs font-bold text-center transition ${
+                        isLight
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 shadow-sm'
+                          : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25'
+                      }`}
+                    >
+                      ✓ 승인 완료
+                    </button>
+                    <button
+                      type="button"
+                      id="quick-auth-state-PENDING"
+                      onClick={() => {
+                        updateVerificationStatus('PENDING', '심사 대기 중 (서류 확인 단계)');
+                        showToast('소유주 인증 심사 대기(PENDING) 상태로 전환되었습니다.', 'amber');
+                      }}
+                      className={`p-2 rounded-xl border text-xs font-bold text-center transition ${
+                        isLight
+                          ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100 shadow-sm'
+                          : 'bg-amber-500/15 border-amber-500/30 text-amber-300 hover:bg-amber-500/25'
+                      }`}
+                    >
+                      ⏳ 심사 대기
+                    </button>
+                    <button
+                      type="button"
+                      id="quick-auth-state-REJECTED"
+                      onClick={() => {
+                        updateVerificationStatus('REJECTED', '등록증 명의 불일치로 반려됨');
+                        showToast('소유주 인증이 반려(REJECTED)되었습니다.', 'rose');
+                      }}
+                      className={`p-2 rounded-xl border text-xs font-bold text-center transition ${
+                        isLight
+                          ? 'bg-rose-50 border-rose-300 text-rose-800 hover:bg-rose-100 shadow-sm'
+                          : 'bg-rose-500/15 border-rose-500/30 text-rose-300 hover:bg-rose-500/25'
+                      }`}
+                    >
+                      ✕ 반려 상태
+                    </button>
+                  </div>
+                </div>
+
+                {/* OCR 교차 검증 시뮬레이션 프리셋 4종 */}
+                <div className="space-y-2">
+                  <span className={`text-xs font-bold uppercase tracking-wider ${isLight ? 'text-stone-500' : 'text-zinc-400'}`}>
+                    OCR 서류 교차 검증 프리셋
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      id="ocr-preset-match"
+                      onClick={() => {
+                        updateVerificationStatus(
+                          'VERIFIED',
+                          '12라 3466',
+                          'KMHL341CBNP034661',
+                          '김태훈',
+                          'PRIMARY_OWNER'
+                        );
+                        showToast('소유주 100% 일치 인증 완료', 'emerald');
+                      }}
+                      className={`p-2 rounded-xl border text-xs font-bold text-left transition ${
+                        isLight
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-sm'
+                          : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                      }`}
+                    >
+                      ① 본인소유 일치
+                    </button>
+                    <button
+                      type="button"
+                      id="ocr-preset-codriver-pending"
+                      onClick={() => {
+                        updateVerificationStatus(
+                          'PENDING',
+                          '12라 3466',
+                          'KMHL341CBNP034661',
+                          '박지영 (배우자)',
+                          'CO_DRIVER'
+                        );
+                        showToast('가족 공동운전자 승인대기', 'amber');
+                      }}
+                      className={`p-2 rounded-xl border text-xs font-bold text-left transition ${
+                        isLight
+                          ? 'bg-amber-50 border-amber-300 text-amber-800 shadow-sm'
+                          : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                      }`}
+                    >
+                      ② 가족차량 승인대기
+                    </button>
+                    <button
+                      type="button"
+                      id="ocr-preset-codriver-approved"
+                      onClick={() => {
+                        updateVerificationStatus(
+                          'VERIFIED',
+                          '12라 3466',
+                          'KMHL341CBNP034661',
+                          '박지영 (배우자)',
+                          'CO_DRIVER'
+                        );
+                        showToast('가족차량 소유주 승인완료', 'sky');
+                      }}
+                      className={`p-2 rounded-xl border text-xs font-bold text-left transition ${
+                        isLight
+                          ? 'bg-blue-50 border-blue-300 text-blue-800 shadow-sm'
+                          : 'bg-blue-500/15 border-blue-500/30 text-blue-300'
+                      }`}
+                    >
+                      ③ 공동운전자 승인완료
+                    </button>
+                    <button
+                      type="button"
+                      id="ocr-preset-fraud"
+                      onClick={() => {
+                        updateVerificationStatus(
+                          'REJECTED',
+                          '12라 3466',
+                          'INVALID_VIN_123',
+                          '홍길동',
+                          'PRIMARY_OWNER',
+                          '번호판 사진과 등록증 정보 불일치'
+                        );
+                        showToast('번호판 불일치 반려', 'rose');
+                      }}
+                      className={`p-2 rounded-xl border text-xs font-bold text-left transition ${
+                        isLight
+                          ? 'bg-rose-50 border-rose-300 text-rose-800 shadow-sm'
+                          : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                      }`}
+                    >
+                      ④ 도용/불일치 반려
                     </button>
                   </div>
                 </div>
